@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { directusServer } from "@/lib/directus";
-import { readItems } from "@directus/sdk";
 
 export async function GET() {
     try {
-        const priceTypes = await directusServer.request(readItems("price_types", {
-            limit: -1,
-        }));
+        // Directus removed: return mock data or fetch from alternative source
+        const priceTypes = [
+            { id: 1, name: "Retail" },
+            { id: 2, name: "Wholesale" }
+        ];
         return NextResponse.json(priceTypes);
     } catch (error) {
         console.error("Error fetching price types:", error);

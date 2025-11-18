@@ -1,8 +1,8 @@
 // src/app/api/lookup/[resource]/route.ts
 export const runtime = "nodejs";
 
-import {NextResponse} from "next/server";
-import {cookies as nextCookies} from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies as nextCookies } from "next/headers";
 
 // Default to the provided Directus server if the env var is not set.
 const DIRECTUS = process.env.NEXT_PUBLIC_DIRECTUS_URL ?? "http://100.119.3.44:8090";
@@ -31,13 +31,11 @@ const MAP: Record<
     sections: {path: "sections", fields: "section_id,section_name", nameField: "section_name", idField: "section_id"}
 };
 
-export async function GET(req: Request, context: { params: { resource: string } }) {
-    if (!DIRECTUS) return NextResponse.json([], {status: 200});
-
-    // Await context.params as required by Next.js 14+
+export async function GET(req: NextRequest, context: { params: Promise<{ resource: string }> }) {
+    if (!DIRECTUS) return NextResponse.json([], { status: 200 });
     const { resource } = await context.params;
     const cfg = MAP[resource];
-    if (!cfg) return NextResponse.json([], {status: 200});
+    if (!cfg) return NextResponse.json([], { status: 200 });
 
     const url = new URL(req.url);
     const q = url.searchParams.get("q") ?? "";
@@ -65,7 +63,7 @@ export async function GET(req: Request, context: { params: { resource: string } 
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
         // don't explode the UI on lookup failures—just return empty
-        return NextResponse.json([], {status: 200});
+        return NextResponse.json([], { status: 200 });
     }
 
     const data = (j?.data ?? []) as any[];
@@ -76,7 +74,7 @@ export async function GET(req: Request, context: { params: { resource: string } 
         if (cfg.extra?.includes("unit_shortcut") && row.unit_shortcut) {
             meta.subtitle = row.unit_shortcut;
         }
-        return {id, name, meta};
+        return { id, name, meta };
     });
 
     return NextResponse.json(options);

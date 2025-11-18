@@ -1,28 +1,28 @@
 // src/app/api/line-discount/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { directusServer } from "@/lib/directus";
-import { readItems } from "@directus/sdk";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get("query");
 
   try {
-    const filter: any = {};
+    // Directus removed: return mock data or fetch from alternative source
+    const allDiscounts = [
+      { id: 1, name: "Holiday Discount", discount_value: 10 },
+      { id: 2, name: "Clearance", discount_value: 20 },
+    ];
+    let filtered = allDiscounts;
     if (query) {
-      filter.discount_name = { _contains: query };
+      filtered = allDiscounts.filter((d) =>
+        d.name.toLowerCase().includes(query.toLowerCase())
+      );
     }
-    const res = await directusServer.request(
-      readItems("line_discount", {
-        fields: ["id", "discount_name as name", "discount_value"],
-        filter,
-        limit: 20,
-      })
-    );
-
-    return NextResponse.json({ data: res });
+    return NextResponse.json({ data: filtered });
   } catch (error) {
     console.error("Error fetching line discounts:", error);
-    return NextResponse.json({ error: "Failed to fetch line discounts" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch line discounts" },
+      { status: 500 }
+    );
   }
 }

@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies as nextCookies } from 'next/headers';
 import { ENRICHED_FIELDS, fromDirectusRow, toDirectusBody } from '@/modules/product-management/adapter';
 
@@ -8,14 +8,15 @@ const DIRECTUS = process.env.NEXT_PUBLIC_DIRECTUS_URL ?? '';
 const ACCESS   = process.env.AUTH_ACCESS_COOKIE ?? 'vos_access';
 
 export async function GET(
-    _req: Request,
-    ctx: { params: { id: string } }         // 👈 accept params here
+    _req: NextRequest,
+    context: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await context.params;
     const cookieStore = await nextCookies();
     const auth = cookieStore.get(ACCESS)?.value;
 
     const res = await fetch(
-        `${DIRECTUS}/items/products/${encodeURIComponent(ctx.params.id)}?fields=${ENRICHED_FIELDS}`,
+        `${DIRECTUS}/items/products/${encodeURIComponent(id)}?fields=${ENRICHED_FIELDS}`,
         { headers: auth ? { Authorization: `Bearer ${auth}` } : undefined, cache: 'no-store' }
     );
     const json = await res.json().catch(() => ({}));
@@ -24,14 +25,15 @@ export async function GET(
 }
 
 export async function PATCH(
-    req: Request,
-    ctx: { params: { id: string } }         // 👈 accept params here
+    req: NextRequest,
+    context: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await context.params;
     const cookieStore = await nextCookies();
     const auth = cookieStore.get(ACCESS)?.value;
     const body = await req.json().catch(() => ({}));
 
-    const res = await fetch(`${DIRECTUS}/items/products/${encodeURIComponent(ctx.params.id)}`, {
+    const res = await fetch(`${DIRECTUS}/items/products/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: `Bearer ${auth}` } : {}) },
         body: JSON.stringify(toDirectusBody(body)),
@@ -42,13 +44,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-    _req: Request,
-    ctx: { params: { id: string } }         // 👈 accept params here
+    _req: NextRequest,
+    context: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await context.params;
     const cookieStore = await nextCookies();
     const auth = cookieStore.get(ACCESS)?.value;
 
-    const res = await fetch(`${DIRECTUS}/items/products/${encodeURIComponent(ctx.params.id)}`, {
+    const res = await fetch(`${DIRECTUS}/items/products/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: auth ? { Authorization: `Bearer ${auth}` } : undefined,
     });
