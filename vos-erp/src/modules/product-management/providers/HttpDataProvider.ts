@@ -95,40 +95,31 @@ export class HttpDataProvider implements DataProvider {
         priceTypeId: number | string,
         value: number | null
     ): Promise<ProductPrice | null> {
-        const { data: existing } = await supabase
+        // IMPORTANT: Requires a unique constraint on the table for (product_id, price_type_id)
+        //
+        // ALTER TABLE product_per_price_type
+        // ADD CONSTRAINT product_price_type_unique
+        // UNIQUE (product_id, price_type_id);
+
+        const { data, error } = await supabase
             .from("product_per_price_type")
-            .select("id")
-            .eq("product_id", productId)
-            .eq("price_type_id", priceTypeId)
+            .upsert({
+                product_id: Number(productId),
+                price_type_id: Number(priceTypeId),
+                price: value,
+                status: 'active'
+            }, { onConflict: 'product_id,price_type_id' })
+            .select()
             .single();
-        let result;
-        if (existing) {
-            result = await supabase
-                .from("product_per_price_type")
-                .update({ price: value })
-                .eq("id", existing.id)
-                .select()
-                .single();
-        } else {
-            result = await supabase
-                .from("product_per_price_type")
-                .insert({
-                    product_id: productId,
-                    price_type_id: priceTypeId,
-                    price: value,
-                    status: 'active'
-                })
-                .select()
-                .single();
-        }
-        if (result.error) throw result.error;
-        const item = result.data;
+
+        if (error) throw error;
+
         return {
-            id: item.id,
-            productId: item.product_id,
-            priceTypeId: item.price_type_id,
-            value: item.price,
-            status: item.status,
+            id: data.id,
+            productId: data.product_id,
+            priceTypeId: data.price_type_id,
+            value: data.price,
+            status: data.status,
         };
     }
 

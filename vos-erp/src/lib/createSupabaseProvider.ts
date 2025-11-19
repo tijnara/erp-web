@@ -21,7 +21,7 @@ export function createSupabaseProvider<T_UI, T_API>(
             const { data, count, error } = await query;
             if (error) {
                 console.error(`Failed to list ${tableName}:`, error);
-                return { items: [], total: 0 };
+                throw error; // Let the UI handle the error state
             }
             return { items: (data || []).map(toUI), total: count || 0 };
         },
