@@ -36,49 +36,52 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
 
         async function fetchLookups() {
             try {
-                // Run all requests in parallel
+                // 1. Define promises with EXACT column names from your schema
                 const [branchRes, opRes, compRes, priceRes, userRes] = await Promise.all([
-                    supabase.from("branches").select("id,branch_code,branch_name"),
-                    supabase.from("operations").select("id,operation_name,code"),
-                    supabase.from("companies").select("company_id,company_code,company_name"),
-                    supabase.from("price_types").select("price_type_id,price_type_name"),
-                    supabase.from("users").select("user_id,user_fname,user_lname,user_email")
+                    // Branches: id, branch_code, branch_name
+                    supabase.from("branches").select("id, branch_code, branch_name"),
+                    // Operations: id, operation_name, code
+                    supabase.from("operations").select("id, operation_name, code"),
+                    // Company: company_id, company_code, company_name
+                    supabase.from("company").select("company_id, company_code, company_name"),
+                    // Price Types: price_type_id, price_type_name
+                    supabase.from("price_types").select("price_type_id, price_type_name"),
+                    // Users: user_id, user_fname, user_lname, user_email
+                    supabase.from("users").select("user_id, user_fname, user_lname, user_email")
                 ]);
 
                 if (!mounted) return;
 
-                // Helper to build maps safely
-                const buildMap = (data: any[] | null, idKeys: string[], nameKeys: string[]) => {
+                // 2. Helper to map results to a simple ID -> Name object
+                const buildMap = (data: any[] | null, idKey: string, nameKeys: string[]) => {
                     const map: Record<string, string> = {};
                     if (!data) return map;
                     for (const item of data) {
-                        const id = idKeys.map(k => item[k]).find(v => v != null);
-                        const name = nameKeys.map(k => item[k]).find(v => v != null);
-                        if (id != null) map[String(id)] = String(name || id);
+                        const id = item[idKey];
+                        // Find the first available name property
+                        const name = nameKeys.map(k => item[k]).find(v => v) || id;
+                        if (id != null) map[String(id)] = String(name);
                     }
                     return map;
                 };
 
+                // 3. Set state using the specific ID columns for each table
                 setLookups({
-                    branches: buildMap(branchRes.data, ['id', 'branch_code'], ['branch_name']),
-                    operations: buildMap(opRes.data, ['id'], ['operation_name', 'code']),
-                    companies: buildMap(compRes.data, ['company_id'], ['company_name', 'company_code']),
-                    priceTypes: buildMap(priceRes.data, ['price_type_id'], ['price_type_name']),
-                    users: (userRes.data || []).reduce((acc, u) => {
-
-                        const id = u.user_id;
-                        if (id) {
-                            acc[String(id)] = [u.user_fname, u.user_lname].filter(Boolean).join(" ") || u.user_email || String(id);
-                        }
-                        return acc;
-                    }, {} as Record<string, string>)
+                    branches: buildMap(branchRes.data, 'id', ['branch_name', 'branch_code']),
+                    operations: buildMap(opRes.data, 'id', ['operation_name', 'code']),
+                    companies: buildMap(compRes.data, 'company_id', ['company_name', 'company_code']),
+                    priceTypes: buildMap(priceRes.data, 'price_type_id', ['price_type_name']),
+                    users: buildMap(userRes.data, 'user_id', ['user_fname', 'user_email']), // Manual join logic below for full name if preferred
                 });
 
-                // Check for critical connection errors
-                const errors = [branchRes, opRes, compRes, priceRes, userRes].map(r => r.error).filter(Boolean);
-                if (errors.length > 0) {
-                    console.error("Lookup loading errors:", errors);
-                    // Optional: toast.error("Failed to load some reference data");
+                // Optional: Better user name mapping (First Last)
+                if (userRes.data) {
+                    const userMap: Record<string, string> = {};
+                    userRes.data.forEach((u: any) => {
+                        const name = [u.user_fname, u.user_lname].filter(Boolean).join(" ") || u.user_email;
+                        userMap[String(u.user_id)] = name;
+                    });
+                    setLookups(prev => ({ ...prev, users: userMap }));
                 }
 
             } catch (error) {
