@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { supabase } from "@/lib/supabase";
 import type { DataProvider } from "../providers/DataProvider";
 import type { Supplier } from "../types";
 import { SupplierFormDialog } from "./SupplierFormDialog";
@@ -24,6 +25,8 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
     const [deliveryTerms, setDeliveryTerms] = useState<DeliveryTerm[]>([]);
     const [detailsTab, setDetailsTab] = useState<"details" | "discounts" | "brand-discounts" | "category-discounts">("details");
 
+    const totalPages = useMemo(() => Math.ceil(total / limit), [total, limit]);
+
     async function refresh() {
         const offset = (page - 1) * limit;
         const { items, total } = await provider.listSuppliers({ q, limit, offset });
@@ -32,36 +35,26 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
     }
 
     useEffect(() => {
-        let alive = true;
-        const offset = (page - 1) * limit;
-        provider.listSuppliers({ q, limit, offset }).then(({ items, total }) => {
-            if (!alive) return;
-            setRows(items);
-            setTotal(total);
-        });
-
-        // Load delivery terms from Supabase
-        import('@/lib/supabase').then(({ supabase }) => {
-            supabase
+        let mounted = true;
+        async function fetchDeliveryTerms() {
+            const { data, error } = await supabase
                 .from("delivery_terms")
-                .select("id, delivery_name")
-                .then(({ data, error }) => {
-                    if (error) {
-                        console.error("Failed to fetch delivery terms:", error);
-                        return;
-                    }
-                    if (alive && data) {
-                        setDeliveryTerms(data);
-                    }
-                });
-        }).catch((error) => {
-            console.error("Failed to load supabase:", error);
-        });
+                .select("id, delivery_name");
+            if (error) {
+                console.error("Failed to fetch delivery terms:", error);
+                return;
+            }
+            if (mounted && data) {
+                setDeliveryTerms(data);
+            }
+        }
+        fetchDeliveryTerms();
+        return () => { mounted = false; };
+    }, []);
 
-        return () => {
-            alive = false;
-        };
-    }, [q, page, provider, limit]);
+    useEffect(() => {
+        refresh();
+    }, [q, page]);
 
     return (
         <div className="space-y-4">
@@ -134,7 +127,7 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                                     </td>
                                     <td className="p-3">
                                         <button
-                                            className="px-2 py-1 rounded-lg border text-xs"
+                                            className="px-2 py-1 rounded border text-xs hover:bg-gray-100"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setMode("edit");
@@ -149,7 +142,7 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                             ))}
                             {rows.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-6 text-center text-gray-500">
+                                    <td colSpan={7} className="p-6 text-center text-gray-500">
                                         No suppliers found.
                                     </td>
                                 </tr>
@@ -158,7 +151,7 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                     </table>
                     <div className="flex justify-between items-center p-3 border-t">
                         <div className="text-sm text-gray-500">
-                            Page {page} of {Math.ceil(total / limit)} ({total} items)
+                            Page {page} of {totalPages || 1} ({total} items)
                         </div>
                         <div className="flex gap-2">
                             <button
@@ -170,7 +163,7 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                             </button>
                             <button
                                 className="text-sm px-3 py-1 rounded border disabled:opacity-50"
-                                disabled={page >= Math.ceil(total / limit)}
+                                disabled={page >= totalPages}
                                 onClick={() => setPage((p) => p + 1)}
                             >
                                 Next
@@ -179,18 +172,18 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                     </div>
                 </div>
             ) : (
-                <div>
-                    <div className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200 rounded-t-xl">
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200">
                         <div className="font-medium">Supplier Details</div>
                         <div className="flex gap-2">
                             <button
-                                className="text-xs px-2 py-1 rounded border"
+                                className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50"
                                 onClick={() => setSelected(null)}
                             >
                                 Back to list
                             </button>
                             <button
-                                className="text-xs px-2 py-1 rounded border"
+                                className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50"
                                 onClick={() => {
                                     setMode("edit");
                                     setCurrent(selected);
@@ -201,109 +194,61 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                             </button>
                         </div>
                     </div>
-                    <div className="border-b border-gray-200">
-                        <div className="flex border-b">
-                        <button
-                            className={`px-4 py-2 text-sm font-medium ${detailsTab === "details" ? "border-b-2 border-primary text-primary" : "text-gray-500"}`}
-                            onClick={() => setDetailsTab("details")}
-                        >
-                            Supplier Details
-                        </button>
-                        <button
-                            className={`px-4 py-2 text-sm font-medium ${detailsTab === "discounts" ? "border-b-2 border-primary text-primary" : "text-gray-500"}`}
-                            onClick={() => setDetailsTab("discounts")}
-                        >
-                            Supplier Discount per Product
-                        </button>
-                        <button
-                            className={`px-4 py-2 text-sm font-medium ${detailsTab === "brand-discounts" ? "border-b-2 border-primary text-primary" : "text-gray-500"}`}
-                            onClick={() => setDetailsTab("brand-discounts")}
-                        >
-                            Supplier Discount per Brand
-                        </button>
-                        <button
-                            className={`px-4 py-2 text-sm font-medium ${detailsTab === "category-discounts" ? "border-b-2 border-primary text-primary" : "text-gray-500"}`}
-                            onClick={() => setDetailsTab("category-discounts")}
-                        >
-                            Supplier Discount per Category
-                        </button>
+                    <div className="border-b border-gray-200 bg-white">
+                        <div className="flex overflow-x-auto">
+                            {[{ key: "details", label: "Supplier Details" }, { key: "discounts", label: "Product Discounts" }, { key: "brand-discounts", label: "Brand Discounts" }, { key: "category-discounts", label: "Category Discounts" }].map((tab) => (
+                                <button
+                                    key={tab.key}
+                                    className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${detailsTab === tab.key ? "border-b-2 border-primary text-primary" : "text-gray-500 hover:text-gray-700"}`}
+                                    onClick={() => setDetailsTab(tab.key as any)}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
-
-                    {detailsTab === "details" && (
-                        <div className="overflow-hidden border border-t-0 border-gray-200 rounded-b-xl">
+                    <div className="bg-white">
+                        {detailsTab === "details" && (
                             <table className="w-full text-sm">
                                 <tbody>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Supplier Name</td>
-                                        <td className="p-3">{selected.supplier_name}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Supplier Shortcut</td>
-                                        <td className="p-3">{selected.supplier_shortcut}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Contact Person</td>
-                                        <td className="p-3">{selected.contact_person ?? "-"}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Email</td>
-                                        <td className="p-3">{selected.email_address ?? "-"}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Phone</td>
-                                        <td className="p-3">{selected.phone_number ?? "-"}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Address</td>
-                                        <td className="p-3">{selected.address}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Supplier Type</td>
-                                        <td className="p-3">{selected.supplier_type ?? "-"}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">TIN</td>
-                                        <td className="p-3">{selected.tin_number ?? "-"}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Payment Terms</td>
-                                        <td className="p-3">{selected.payment_terms ?? "-"}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Delivery Terms</td>
-                                        <td className="p-3">
-                                            {deliveryTerms.find((d) => d.id === selected.delivery_terms)?.delivery_name ??
-                                                selected.delivery_terms ?? "-"}
-                                        </td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Date Added</td>
-                                        <td className="p-3">{selected.date_added}</td>
-                                    </tr>
-                                    <tr className="border-t">
-                                        <td className="p-3 font-medium text-gray-600">Is Active</td>
-                                        <td className="p-3">{selected.isActive ? "Yes" : "No"}</td>
-                                    </tr>
+                                    {[
+                                        ["Supplier Name", selected.supplier_name],
+                                        ["Shortcut", selected.supplier_shortcut],
+                                        ["Contact Person", selected.contact_person],
+                                        ["Email", selected.email_address],
+                                        ["Phone", selected.phone_number],
+                                        ["Address", selected.address],
+                                        ["Type", selected.supplier_type],
+                                        ["TIN", selected.tin_number],
+                                        ["Payment Terms", selected.payment_terms],
+                                        ["Delivery Terms", deliveryTerms.find((d) => d.id === Number(selected.delivery_terms))?.delivery_name ?? selected.delivery_terms],
+                                        ["Date Added", selected.date_added],
+                                        ["Active", selected.isActive ? "Yes" : "No"]
+                                    ].map(([label, value]) => (
+                                        <tr key={String(label)} className="border-b last:border-0">
+                                            <td className="p-3 font-medium text-gray-600 w-1/3">{label}</td>
+                                            <td className="p-3">{value ?? "-"}</td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
-                        </div>
-                    )}
-                    {detailsTab === "discounts" && (
-                        <div className="p-4 border border-t-0 border-gray-200 rounded-b-xl">
-                            <SupplierDiscountPerProduct supplier={selected} provider={provider as any} />
-                        </div>
-                    )}
-                    {detailsTab === "brand-discounts" && (
-                        <div className="p-4 border border-t-0 border-gray-200 rounded-b-xl">
-                            <SupplierDiscountPerBrand supplier={selected} provider={provider as any} />
-                        </div>
-                    )}
-                    {detailsTab === "category-discounts" && (
-                        <div className="p-4 border border-t-0 border-gray-200 rounded-b-xl">
-                            <SupplierDiscountPerCategory supplier={selected} provider={provider as any} />
-                        </div>
-                    )}
+                        )}
+                        {detailsTab === "discounts" && (
+                            <div className="p-4">
+                                <SupplierDiscountPerProduct supplier={selected} provider={provider as any} />
+                            </div>
+                        )}
+                        {detailsTab === "brand-discounts" && (
+                            <div className="p-4">
+                                <SupplierDiscountPerBrand supplier={selected} provider={provider as any} />
+                            </div>
+                        )}
+                        {detailsTab === "category-discounts" && (
+                            <div className="p-4">
+                                <SupplierDiscountPerCategory supplier={selected} provider={provider as any} />
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -319,14 +264,7 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
                         await provider.updateSupplier(current.id, dto);
                     }
                     await refresh();
-                    if (selected) {
-                        try {
-                            const latest = await provider.getSupplier(selected.id);
-                            setSelected(latest);
-                        } catch (e) {
-                            // ignore if fetch fails
-                        }
-                    }
+                    setOpen(false); // Close dialog after submit
                 }}
             />
         </div>
