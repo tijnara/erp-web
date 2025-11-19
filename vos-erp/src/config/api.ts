@@ -5,8 +5,8 @@ export type ApiConfig = {
   baseUrl: string;
 };
 
-// Default API base URL (preserves current behavior)
-const DEFAULT_BASE_URL = "http://100.119.3.44:8090";
+// UPDATE: Use localhost for development, or an Environment Variable
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
 
 // Resolve base URL with a runtime override if provided via window.__VOS_API_BASE__
 function resolveBaseUrl(): string {

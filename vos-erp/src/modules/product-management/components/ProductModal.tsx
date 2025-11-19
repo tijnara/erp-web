@@ -3,25 +3,25 @@
 
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
-import { AsyncSelect } from "@/components/ui/AsyncSelect";
 import type { DataProvider } from "../providers/DataProvider";
 import type { Product, UpsertProductDTO } from "../types";
 import { BrandDropdown } from "./BrandDropdown";
 import { CategoryDropdown } from "./CategoryDropdown";
 import { useSession } from "@/hooks/use-session";
+import { itemsUrl } from "@/config/api";
 
 export function ProductModal({
-                                 open,
-                                 onClose,
-                                 provider,
-                                 product,    // if present → Edit; otherwise → Add
-                                 onSaved,    // callback to refresh list
-                             }: {
+    open,
+    onCloseAction,
+    provider,
+    product,    // if present → Edit; otherwise → Add
+    onSavedAction,    // callback to refresh list
+}: {
     open: boolean;
-    onClose: () => void;
+    onCloseAction: () => void;
     provider: DataProvider;
     product?: Product | null;
-    onSaved?: (saved: Product) => void;
+    onSavedAction?: (saved: Product) => void;
 }) {
     const { session } = useSession();
     const isEdit = !!product;
@@ -49,8 +49,11 @@ export function ProductModal({
         if (!open) return;
 
         // Fetch unit options when the modal opens
-        fetch("http://100.119.3.44:8090/items/units?fields=unit_id,unit_name")
-            .then((response) => response.json())
+        fetch(itemsUrl("units?fields=unit_id,unit_name"))
+            .then((response) => {
+                if (!response.ok) throw new Error("Network response was not ok");
+                return response.json();
+            })
             .then((data) => {
                 const options = (data.data || []).map((unit: any) => ({
                     id: unit.unit_id,
@@ -116,8 +119,8 @@ export function ProductModal({
             } else {
                 saved = await provider.createProduct(payload);
             }
-            onSaved?.(saved);
-            onClose();
+            onSavedAction?.(saved);
+            onCloseAction();
         } catch (e: any) {
             setErr(e?.message || "Save failed");
         } finally {
@@ -128,7 +131,7 @@ export function ProductModal({
     return (
         <Modal
             open={open}
-            onClose={() => !saving && onClose()}
+            onClose={() => !saving && onCloseAction()}
             title={isEdit ? "Edit Product" : "Add Product"}
             width="max-w-2xl"
         >
@@ -259,7 +262,7 @@ export function ProductModal({
                     <button
                         type="button"
                         className="px-3 py-2 rounded-md border"
-                        onClick={onClose}
+                        onClick={onCloseAction}
                         disabled={saving}
                     >
                         Cancel

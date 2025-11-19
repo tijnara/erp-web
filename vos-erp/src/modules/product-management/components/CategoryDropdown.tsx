@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { itemsUrl } from "../../../config/api";
 
 export function CategoryDropdown({
   value,
@@ -18,7 +19,7 @@ export function CategoryDropdown({
   useEffect(() => {
     async function fetchCategories() {
       try {
-        const response = await fetch("http://100.119.3.44:8090/items/categories");
+        const response = await fetch(itemsUrl("categories"));
         if (!response.ok) {
           throw new Error("Failed to fetch categories");
         }
@@ -29,6 +30,7 @@ export function CategoryDropdown({
         }));
         setCategories(formattedCategories);
       } catch (err: any) {
+        console.error(err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -50,9 +52,9 @@ export function CategoryDropdown({
     <div>
       <label className="text-sm">Category</label>
       {loading ? (
-        <p>Loading categories...</p>
+        <p className="text-xs text-gray-500">Loading...</p>
       ) : error ? (
-        <p className="text-red-500">{error}</p>
+        <p className="text-xs text-red-500">Error loading categories</p>
       ) : (
         <select
           className="mt-1 w-full rounded-md border px-3 py-2 bg-white dark:bg-zinc-900"
@@ -70,4 +72,3 @@ export function CategoryDropdown({
     </div>
   );
 }
-

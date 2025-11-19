@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { itemsUrl } from "../../../config/api";
 
 export function BrandDropdown({
   value,
@@ -18,7 +19,7 @@ export function BrandDropdown({
   useEffect(() => {
     async function fetchBrands() {
       try {
-        const response = await fetch("http://100.119.3.44:8090/items/brand");
+        const response = await fetch(itemsUrl("brand"));
         if (!response.ok) {
           throw new Error("Failed to fetch brands");
         }
@@ -29,6 +30,7 @@ export function BrandDropdown({
         }));
         setBrands(formattedBrands);
       } catch (err: any) {
+        console.error(err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -70,4 +72,3 @@ export function BrandDropdown({
     </div>
   );
 }
-

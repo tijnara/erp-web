@@ -12,6 +12,7 @@ import { CreatePOModal } from "./CreatePOModal";
 import { AddProductModal } from "./AddProductModal";
 import { ReceiveStockModal } from "./ReceiveStockModal";
 import axios from "axios"; // Ensure axios is imported
+import { itemsUrl } from "@/config/api";
 
 // Updated type definition for PurchaseOrderProduct to include 'purchase_order_id'
 interface PurchaseOrderProduct {
@@ -255,7 +256,7 @@ export function PurchaseOrderView() {
     useEffect(() => {
         const fetchAllProducts = async () => {
             try {
-                const response = await axios.get("http://100.119.3.44:8090/items/products?limit=-1");
+                const response = await axios.get(itemsUrl("products?limit=-1"));
                 const productsData = response.data?.data;
                 if (productsData && Array.isArray(productsData)) {
                     const newMap = new Map<number, string>();
@@ -668,7 +669,7 @@ function ProductDetailsModalContent({ product, getBranchName, productNameMap, on
         // Fetch branch data once when the modal loads
         const fetchBranches = async () => {
             try {
-                const response = await fetch("http://100.119.3.44:8090/items/branches");
+                const response = await fetch(itemsUrl("branches"));
                 if (response.ok) {
                     const data = await response.json();
                     setBranches(data.data || []);
@@ -692,18 +693,18 @@ function ProductDetailsModalContent({ product, getBranchName, productNameMap, on
     useEffect(() => {
         const fetchProductDetails = async () => {
             try {
-                const response = await axios.get(`http://100.119.3.44:8090/items/products/${product.product_id}`);
+                const response = await axios.get(itemsUrl(`products/${product.product_id}`));
                 const fetchedProduct = response.data?.data;
 
                 if (fetchedProduct?.product_brand) {
-                    const brandResponse = await axios.get(`http://100.119.3.44:8090/items/brand`);
+                    const brandResponse = await axios.get(itemsUrl("brand"));
                     const brands = brandResponse.data?.data || [];
                     const brand = brands.find((b: { brand_id: number }) => b.brand_id === fetchedProduct.product_brand);
                     fetchedProduct.product_brand = brand ? brand.brand_name : "Unknown Brand";
                 }
 
                 if (fetchedProduct?.product_category) {
-                    const categoryResponse = await axios.get(`http://100.119.3.44:8090/items/categories`);
+                    const categoryResponse = await axios.get(itemsUrl("categories"));
                     const categories = categoryResponse.data?.data || [];
                     const category = categories.find((c: { category_id: number }) => c.category_id === fetchedProduct.product_category);
                     fetchedProduct.product_category = category ? category.category_name : "Unknown Category";

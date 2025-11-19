@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { itemsUrl } from "@/config/api";
 
 interface Product {
     product_id: number;
@@ -34,7 +35,7 @@ export function ReceiveStockModal({ open, onClose, purchaseOrderId }: ReceiveSto
             try {
                 // 1️⃣ Fetch products for this purchase order
                 const productRes = await fetch(
-                    `http://100.119.3.44:8090/items/purchase_order_products?filter[purchase_order_id][_eq]=${purchaseOrderId}`
+                    itemsUrl(`purchase_order_products?filter[purchase_order_id][_eq]=${purchaseOrderId}`)
                 );
                 const productData = await productRes.json();
                 const items = Array.isArray(productData)
@@ -53,7 +54,7 @@ export function ReceiveStockModal({ open, onClose, purchaseOrderId }: ReceiveSto
                 const branchId = formattedItems[0].branch_id;
 
                 // 3️⃣ Fetch branch list and find matching name
-                const branchRes = await fetch("http://100.119.3.44:8090/items/branches");
+                const branchRes = await fetch(itemsUrl("branches"));
                 const branchData = await branchRes.json();
                 console.log("Branch API Response:", branchData); // 👈 Add this
 

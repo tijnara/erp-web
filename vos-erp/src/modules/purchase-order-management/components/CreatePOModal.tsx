@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { itemsUrl } from "@/config/api";
 
 // --- Type Definitions ---
 interface DropdownOption {
@@ -89,12 +90,12 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                         transactionRes,
                         latestPORes
                     ] = await Promise.all([
-                        axios.get("http://100.119.3.44:8090/items/payment_terms"),
-                        axios.get("http://100.119.3.44:8090/items/price_types"),
-                        axios.get("http://100.119.3.44:8090/items/receiving_type"),
-                        axios.get("http://100.119.3.44:8090/items/suppliers"),
-                        axios.get("http://100.119.3.44:8090/items/transaction_type"),
-                        axios.get("http://100.119.3.44:8090/items/purchase_order?limit=1&sort=-purchase_order_no"),
+                        axios.get(itemsUrl("payment_terms")),
+                        axios.get(itemsUrl("price_types")),
+                        axios.get(itemsUrl("receiving_type")),
+                        axios.get(itemsUrl("suppliers")),
+                        axios.get(itemsUrl("transaction_type")),
+                        axios.get(itemsUrl("purchase_order?limit=1&sort=-purchase_order_no")),
                     ]);
 
                     // Set dropdown data
@@ -227,7 +228,7 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                 payment_status: 1,
             };
 
-            const response = await axios.post("http://100.119.3.44:8090/items/purchase_order", payload);
+            const response = await axios.post(itemsUrl("purchase_order"), payload);
 
             onPoCreated(response.data.data);
             onClose();
