@@ -67,18 +67,30 @@ export function ConsumablesView({ provider }: { provider: any }) {
             setLoading(true);
             try {
                 const offset = (page - 1) * PAGE_SIZE;
-                // 1. Fetch Consumables (with server-side search & pagination)
-                const { items, total: totalCount } = await provider.listConsumables({
+                // 1. Load Consumables
+                const response = await provider.listConsumables({
                     q,
                     limit: PAGE_SIZE,
                     offset
                 });
-                // 2. Fetch Categories (for the dropdown/table display)
+                // SAFEGUARD: Handle both response formats (Array vs Object) to prevent crash
+                let fetchedItems: Consumable[] = [];
+                let fetchedTotal = 0;
+                if (Array.isArray(response)) {
+                    // Handle legacy provider returning just an array
+                    fetchedItems = response;
+                    fetchedTotal = response.length;
+                } else if (response && Array.isArray(response.items)) {
+                    // Handle new provider returning { items, total }
+                    fetchedItems = response.items;
+                    fetchedTotal = response.total;
+                }
+                // 2. Load Categories
                 const cats = await provider.listCategories();
                 if (alive) {
-                    setConsumables(items);
-                    setTotal(totalCount);
-                    setCategories(cats);
+                    setConsumables(fetchedItems);
+                    setTotal(fetchedTotal);
+                    setCategories(cats || []);
                 }
             } catch (err) {
                 console.error("Error loading data:", err);

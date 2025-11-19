@@ -150,8 +150,14 @@ export const fetchProvider = () => ({
   },
 
   async listUsers() {
-    const { data, error } = await supabase.from("user").select("user_id,user_fname,user_lname");
-    if (error) throw error;
+    const { data, error } = await supabase
+      .from("users")
+      .select("user_id, user_fname, user_lname");
+
+    if (error) {
+      console.error("Error loading users:", error);
+      return [];
+    }
     return data || [];
   },
 
