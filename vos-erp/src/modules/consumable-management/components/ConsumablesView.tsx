@@ -37,6 +37,7 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
     const [loading, setLoading] = useState(true);
     const [q, setQ] = useState("");
     const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editMode, setEditMode] = useState(false);
@@ -57,17 +58,16 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
     useEffect(() => {
         let alive = true;
         const offset = (page - 1) * PAGE_SIZE;
-        Promise.all([provider.listConsumables(), provider.listCategories()])
-            .then(([items, cats]) => {
+        setLoading(true);
+        Promise.all([
+            provider.listConsumables({ q, limit: PAGE_SIZE, offset }),
+            provider.listCategories()
+        ])
+            .then(([result, cats]) => {
                 if (!alive) return;
-                const filtered = (items as unknown as Consumable[]).filter(
-                    (c) =>
-                        c.item_name.toLowerCase().includes(q.toLowerCase()) ||
-                        c.item_code.toLowerCase().includes(q.toLowerCase()) ||
-                        c.brand.toLowerCase().includes(q.toLowerCase())
-                );
-                setConsumables(filtered.slice(offset, offset + PAGE_SIZE));
+                setConsumables(result.items);
                 setCategories(cats as unknown as ConsumableCategory[]);
+                setTotal(result.total);
             })
             .catch((err) => console.error("Error loading:", err))
             .finally(() => setLoading(false));
@@ -76,7 +76,6 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
         };
     }, [provider, q, page]);
 
-    const total = useMemo(() => consumables.length, [consumables]);
     const pageCount = useMemo(() => Math.ceil(total / PAGE_SIZE) || 1, [total]);
 
     const getCategoryName = (id: number) => {
