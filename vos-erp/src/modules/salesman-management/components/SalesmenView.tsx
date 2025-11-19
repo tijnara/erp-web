@@ -6,7 +6,6 @@ import type { DataProvider } from "../providers/DataProvider";
 import type { Salesman } from "../types";
 import { StatBar } from "./StatBar";
 import { SalesmanFormDialog } from "./SalesmanFormDialog";
-import { apiUrl } from "@/config/api";
 
 export function SalesmenView({ provider }: { provider: DataProvider }) {
     const [q, setQ] = useState("");
@@ -36,23 +35,27 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     // Load branches once to resolve branch_name from numeric/code values
     useEffect(() => {
         let alive = true;
-        (async () => {
-            try {
-                const res = await fetch(apiUrl("items/branches"));
-                if (!res.ok) return;
-                const json = await res.json();
-                const rows: any[] = json?.data ?? [];
-                const map: Record<string, string> = {};
-                for (const r of rows) {
-                    const name: string = r.branch_name ?? r.branch_description ?? String(r.id ?? r.branch_code ?? "");
-                    if (r.id != null) map[String(r.id)] = name;
-                    if (r.branch_code != null) map[String(r.branch_code)] = name;
-                }
-                if (alive) setBranchNames(map);
-            } catch {
-                // ignore errors; fallback to showing raw value
-            }
-        })();
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("branches")
+                .select("id, branch_code, branch_name, branch_description")
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.warn("Could not load branches:", error.message);
+                        return;
+                    }
+                    if (!alive || !data) return;
+                    const map: Record<string, string> = {};
+                    for (const r of data) {
+                        const name: string = r.branch_name ?? r.branch_description ?? String(r.id ?? r.branch_code ?? "");
+                        if (r.id != null) map[String(r.id)] = name;
+                        if (r.branch_code != null) map[String(r.branch_code)] = name;
+                    }
+                    setBranchNames(map);
+                });
+        }).catch(err => {
+            console.warn("Could not load branches:", err);
+        });
         return () => {
             alive = false;
         };
@@ -61,23 +64,27 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     // Load operations once to resolve operation_name from numeric values
     useEffect(() => {
         let alive = true;
-        (async () => {
-            try {
-                const res = await fetch(apiUrl("items/operation"));
-                if (!res.ok) return;
-                const json = await res.json();
-                const rows: any[] = json?.data ?? [];
-                const map: Record<string, string> = {};
-                for (const r of rows) {
-                    const id = r.id ?? r.operation_id ?? r.code;
-                    const name: string = r.operation_name ?? r.name ?? r.operation_code ?? String(id ?? "");
-                    if (id != null) map[String(id)] = name;
-                }
-                if (alive) setOperationNames(map);
-            } catch {
-                // ignore errors; fallback to showing raw value
-            }
-        })();
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("operations")
+                .select("id, operation_id, code, operation_name, name, operation_code")
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.warn("Could not load operations:", error.message);
+                        return;
+                    }
+                    if (!alive || !data) return;
+                    const map: Record<string, string> = {};
+                    for (const r of data) {
+                        const id = r.id ?? r.operation_id ?? r.code;
+                        const name: string = r.operation_name ?? r.name ?? r.operation_code ?? String(id ?? "");
+                        if (id != null) map[String(id)] = name;
+                    }
+                    setOperationNames(map);
+                });
+        }).catch(err => {
+            console.warn("Could not load operations:", err);
+        });
         return () => {
             alive = false;
         };
@@ -86,23 +93,27 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     // Load companies once to resolve company_name from numeric/code values
     useEffect(() => {
         let alive = true;
-        (async () => {
-            try {
-                const res = await fetch(apiUrl("items/company"));
-                if (!res.ok) return;
-                const json = await res.json();
-                const rows: any[] = json?.data ?? [];
-                const map: Record<string, string> = {};
-                for (const r of rows) {
-                    const name: string = r.company_name ?? String(r.company_id ?? r.company_code ?? "");
-                    if (r.company_id != null) map[String(r.company_id)] = name;
-                    if (r.company_code != null) map[String(r.company_code)] = name;
-                }
-                if (alive) setCompanyNames(map);
-            } catch {
-                // ignore errors; fallback to showing raw value
-            }
-        })();
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("company")
+                .select("company_id, company_code, company_name")
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.warn("Could not load companies:", error.message);
+                        return;
+                    }
+                    if (!alive || !data) return;
+                    const map: Record<string, string> = {};
+                    for (const r of data) {
+                        const name: string = r.company_name ?? String(r.company_id ?? r.company_code ?? "");
+                        if (r.company_id != null) map[String(r.company_id)] = name;
+                        if (r.company_code != null) map[String(r.company_code)] = name;
+                    }
+                    setCompanyNames(map);
+                });
+        }).catch(err => {
+            console.warn("Could not load companies:", err);
+        });
         return () => {
             alive = false;
         };
@@ -111,23 +122,27 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     // Load price types once to resolve price_type_name from numeric values
     useEffect(() => {
         let alive = true;
-        (async () => {
-            try {
-                const res = await fetch(apiUrl("items/price_types"));
-                if (!res.ok) return;
-                const json = await res.json();
-                const rows: any[] = json?.data ?? [];
-                const map: Record<string, string> = {};
-                for (const r of rows) {
-                    const id = r.price_type_id ?? r.id;
-                    const name: string = r.price_type_name ?? r.name ?? String(id ?? "");
-                    if (id != null) map[String(id)] = name;
-                }
-                if (alive) setPriceTypeNames(map);
-            } catch {
-                // ignore errors; fallback to showing raw value
-            }
-        })();
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("price_types")
+                .select("price_type_id, id, price_type_name, name")
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.warn("Could not load price types:", error.message);
+                        return;
+                    }
+                    if (!alive || !data) return;
+                    const map: Record<string, string> = {};
+                    for (const r of data) {
+                        const id = r.price_type_id ?? r.id;
+                        const name: string = r.price_type_name ?? r.name ?? String(id ?? "");
+                        if (id != null) map[String(id)] = name;
+                    }
+                    setPriceTypeNames(map);
+                });
+        }).catch(err => {
+            console.warn("Could not load price types:", err);
+        });
         return () => {
             alive = false;
         };
@@ -136,25 +151,28 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     // Load users once to resolve encoder name from numeric values
     useEffect(() => {
         let alive = true;
-        (async () => {
-            try {
-                const res = await fetch(apiUrl("items/user"));
-                if (!res.ok) return;
-                const json = await res.json();
-                const rows: any[] = json?.data ?? [];
-                const map: Record<string, string> = {};
-                for (const u of rows) {
-                    const id = u.user_id ?? u.id;
-                    if (id != null) {
-                        const name: string = [u.user_fname, u.user_lname].filter(Boolean).join(" ").trim() || u.user_email || String(id);
-                        map[String(id)] = name;
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("users")
+                .select("user_id, id, user_fname, user_lname, user_email")
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.warn("Could not load users:", error.message);
+                        return;
                     }
-                }
-                if (alive) setUserNames(map);
-            } catch {
-                // ignore errors; fallback to showing raw value
-            }
-        })();
+                    if (!alive || !data) return;
+                    const map: Record<string, string> = {};
+                    for (const u of data) {
+                        const id = u.user_id ?? u.id;
+                        if (id != null) {
+                            map[String(id)] = [u.user_fname, u.user_lname].filter(Boolean).join(" ").trim() || u.user_email || String(id);
+                        }
+                    }
+                    setUserNames(map);
+                });
+        }).catch(err => {
+            console.warn("Could not load users:", err);
+        });
         return () => {
             alive = false;
         };

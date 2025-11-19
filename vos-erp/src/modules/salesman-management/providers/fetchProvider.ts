@@ -49,11 +49,7 @@ export const fetchProvider = (): DataProvider => ({
     async listSalesmen({ q, limit = 20, offset = 0 }: ListParams) {
         let query = supabase
             .from("salesman")
-            .select(`
-                *,
-                users:employee_id ( user_email ),
-                branches:branch_code ( branch_name )
-            `, { count: "exact" })
+            .select("*", { count: "exact" })
             .range(offset, offset + limit - 1);
         if (q && q.trim().length > 0) {
             query = query.or(`salesman_name.ilike.%${q}%,salesman_code.ilike.%${q}%`);

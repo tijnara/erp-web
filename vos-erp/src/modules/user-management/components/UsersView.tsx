@@ -37,10 +37,13 @@ export function UsersView({ provider }: { provider: DataProvider }) {
             setRows(items);
             setTotal(total);
         });
-        fetch("http://100.119.3.44:8090/items/department")
-        .then((res) => res.json())
-        .then((data) => {
-          if(alive) setDepartments(data.data);
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("department")
+                .select("*")
+                .then(({ data }) => {
+                    if (alive && data) setDepartments(data);
+                });
         });
         return () => {
             alive = false;

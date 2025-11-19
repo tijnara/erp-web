@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Supplier, UpsertSupplierDTO } from "../types";
+import { apiUrl } from "../../../config/api";
 
 type Province = { province_code: string; province_name: string; region_code?: string; psgc_code?: string };
 type City = { city_code: string; city_name: string; province_code: string; region_desc?: string; psgc_code?: string };
@@ -136,8 +137,8 @@ export function SupplierFormDialog({
           import("../../../../data/province.json"),
           import("../../../../data/city.json"),
           import("../../../../data/barangay.json"),
-          fetch("http://100.119.3.44:8090/items/delivery_terms"),
-          fetch("http://100.119.3.44:8090/items/transaction_type"),
+          fetch(apiUrl("items/delivery_terms")),
+          fetch(apiUrl("items/transaction_type")),
         ]);
 
         const deliveryTerms = await deliveryTermsResponse.json();

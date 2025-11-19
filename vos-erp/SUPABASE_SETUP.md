@@ -1,0 +1,202 @@
+# Supabase Setup Instructions for Authentication
+
+## 🔴 CRITICAL: Run These SQL Commands in Supabase SQL Editor
+
+### 1. Update User Password to Hashed Version
+
+The password is currently stored as plaintext "aranjit30". This needs to be hashed for security.
+
+```sql
+-- Update the password to a bcrypt hash
+UPDATE users 
+SET user_password = '$2a$10$P9qK2tZ9jYvtboK1TI39geSyqW0jFm5h44ktm19ANVuA4H0arLiSe' 
+WHERE user_email = 'aranjitarchita@gmail.com';
+```
+
+### 2. Enable Row Level Security (RLS) Policies
+
+Without these policies, the login will fail because the anon key cannot read user data.
+
+```sql
+-- Enable RLS on users table (if not already enabled)
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Create a policy to allow reading user data for authentication
+-- This allows the anon key to read user records (including password) for login
+CREATE POLICY "Allow login authentication"
+ON users
+FOR SELECT
+TO anon
+USING (is_deleted = false AND status = 'active');
+
+-- Create a policy for authenticated users to read their own data
+CREATE POLICY "Users can read own data"
+ON users
+FOR SELECT
+TO authenticated
+USING (auth.uid()::text = user_id::text);
+
+-- Create a policy for authenticated users to update their own data
+CREATE POLICY "Users can update own data"
+ON users
+FOR UPDATE
+TO authenticated
+USING (auth.uid()::text = user_id::text);
+
+-- Create policies for admins to manage all users
+CREATE POLICY "Admins can read all users"
+ON users
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM users 
+    WHERE user_id::text = auth.uid()::text 
+    AND is_admin = true
+  )
+);
+
+CREATE POLICY "Admins can insert users"
+ON users
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM users 
+    WHERE user_id::text = auth.uid()::text 
+    AND is_admin = true
+  )
+);
+
+CREATE POLICY "Admins can update all users"
+ON users
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM users 
+    WHERE user_id::text = auth.uid()::text 
+    AND is_admin = true
+  )
+);
+
+CREATE POLICY "Admins can delete users"
+ON users
+FOR DELETE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM users 
+    WHERE user_id::text = auth.uid()::text 
+    AND is_admin = true
+  )
+);
+```
+
+### 3. Create Database Triggers for Sequential IDs
+
+These triggers prevent race conditions when creating sales orders and purchase orders.
+
+#### Sales Order Trigger
+
+```sql
+-- 1. Create a sequence for sales orders
+CREATE SEQUENCE IF NOT EXISTS sales_order_seq;
+
+-- 2. Create a function to generate the sales order number
+CREATE OR REPLACE FUNCTION generate_sales_order_no()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- This generates an ID in the format: SO-YYYY-NNNN
+    NEW.sales_order_no := 'SO-' || EXTRACT(YEAR FROM NOW()) || '-' || lpad(nextval('sales_order_seq')::text, 4, '0');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. Create the trigger
+CREATE TRIGGER set_sales_order_no
+BEFORE INSERT ON sales_order
+FOR EACH ROW
+WHEN (NEW.sales_order_no IS NULL)
+EXECUTE FUNCTION generate_sales_order_no();
+```
+
+#### Purchase Order Trigger
+
+```sql
+-- 1. Create a sequence for purchase orders
+CREATE SEQUENCE IF NOT EXISTS purchase_order_no_seq;
+
+-- 2. Create a function to generate the purchase order number
+CREATE OR REPLACE FUNCTION generate_purchase_order_no()
+RETURNS TRIGGER AS $$
+DECLARE
+    new_po_number TEXT;
+    current_year INT;
+    next_val INT;
+BEGIN
+    current_year := EXTRACT(YEAR FROM NOW());
+    next_val := nextval('purchase_order_no_seq');
+    new_po_number := 'PO-' || current_year::TEXT || '-' || LPAD(next_val::TEXT, 4, '0');
+    NEW.purchase_order_no := new_po_number;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 3. Create the trigger
+CREATE TRIGGER before_insert_purchase_order
+BEFORE INSERT ON purchase_order
+FOR EACH ROW
+EXECUTE FUNCTION generate_purchase_order_no();
+```
+
+### 4. Add Unique Constraint for Product Prices (for upsert optimization)
+
+```sql
+-- Add unique constraint to allow upsert operations
+ALTER TABLE product_per_price_type
+ADD CONSTRAINT product_price_type_unique
+UNIQUE (product_id, price_type_id);
+```
+
+## ✅ After Running These Commands
+
+1. **Test the login** with:
+   - Email: `aranjitarchita@gmail.com`
+   - Password: `aranjit30`
+
+2. **Verify RLS policies** are working by checking if you can:
+   - Login successfully
+   - Access your own user data
+   - Perform admin operations if you're an admin
+
+3. **Test sequential ID generation** by creating:
+   - A new sales order (should get SO-2025-0001, SO-2025-0002, etc.)
+   - A new purchase order (should get PO-2025-0001, PO-2025-0002, etc.)
+
+## 🔒 Security Notes
+
+- Passwords are now hashed with bcrypt (cost factor 10)
+- RLS policies restrict data access based on authentication and user roles
+- The `anon` key can only read active, non-deleted users for authentication
+- Users can only read/update their own data
+- Admins have full access to manage all users
+- Sequential IDs are generated by the database, preventing race conditions
+
+## 📝 Future Password Changes
+
+To hash a new password, run:
+
+```bash
+node vos-erp\scripts\hash-password.js YOUR_PASSWORD
+```
+
+Then copy the hashed password and update it in Supabase.
+
+## ⚠️ Important
+
+- Never store passwords as plaintext
+- Always use the hashed version
+- The login route expects the column name `user_password`, not `password`
+- Ensure RLS is enabled on ALL tables before going to production
+

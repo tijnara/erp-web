@@ -9,7 +9,6 @@ import { SupplierDiscountPerBrand } from "./SupplierDiscountPerBrand";
 import { SupplierDiscountPerCategory } from "./SupplierDiscountPerCategory";
 
 type DeliveryTerm = { id: number; delivery_name: string };
-type SupplierType = { id: number; transaction_type: string };
 
 export function SuppliersView({ provider }: { provider: DataProvider }) {
     const [q, setQ] = useState("");
@@ -40,13 +39,25 @@ export function SuppliersView({ provider }: { provider: DataProvider }) {
             setRows(items);
             setTotal(total);
         });
-        fetch("http://100.119.3.44:8090/items/delivery_terms")
-            .then((res) => res.json())
-            .then((data) => {
-                if (alive && data.data) {
-                    setDeliveryTerms(data.data);
-                }
-            });
+
+        // Load delivery terms from Supabase
+        import('@/lib/supabase').then(({ supabase }) => {
+            supabase
+                .from("delivery_terms")
+                .select("id, delivery_name")
+                .then(({ data, error }) => {
+                    if (error) {
+                        console.error("Failed to fetch delivery terms:", error);
+                        return;
+                    }
+                    if (alive && data) {
+                        setDeliveryTerms(data);
+                    }
+                });
+        }).catch((error) => {
+            console.error("Failed to load supabase:", error);
+        });
+
         return () => {
             alive = false;
         };

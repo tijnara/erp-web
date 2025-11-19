@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts\\choose-port.js dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "node scripts\\choose-port.js dev",
+    "build": "next build",
     "start": "node scripts\\choose-port.js start",
     "lint": "eslint"
   },
@@ -16,6 +16,7 @@
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.0.4",
+    "@supabase/supabase-js": "^2.39.7",
     "@tanstack/react-table": "^8.21.3",
     "argon2": "^0.44.0",
     "axios": "^1.12.2",
@@ -38,8 +39,7 @@
     "tailwindcss-animate": "^1.0.7",
     "xlsx": "^0.18.5",
     "zod": "^4.1.11",
-    "zustand": "^5.0.8",
-    "@supabase/supabase-js": "^2.39.7"
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
