@@ -11,8 +11,8 @@ interface Consumable {
 export const fetchProvider = () => ({
   async listConsumables({ q = "", limit = 20, offset = 0 } = {}) {
     let query = supabase
-      .from("consumables")
-      .select("*", { count: "exact" })
+      .from("consumable_item")
+      .select(`*, consumable_category ( category_name )`, { count: "exact" })
       .range(offset, offset + limit - 1);
     if (q) {
       query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
@@ -22,7 +22,12 @@ export const fetchProvider = () => ({
       console.error("Failed to list consumables:", error);
       return { items: [], total: 0 };
     }
-    return { items: data || [], total: count || 0 };
+    // Flatten category_name
+    const items = (data || []).map((item: any) => ({
+      ...item,
+      category_name: item.consumable_category?.category_name
+    }));
+    return { items, total: count || 0 };
   },
 
   async getConsumable(id: number | string) {
@@ -64,4 +69,3 @@ export const fetchProvider = () => ({
     if (error) throw error;
   }
 });
-

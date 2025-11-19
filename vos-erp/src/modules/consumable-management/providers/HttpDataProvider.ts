@@ -4,12 +4,25 @@ import { Consumable, ConsumableCategory } from "../types";
 import { ConsumablesDataAdapter } from "../adapter";
 
 export class HttpDataProvider implements ConsumablesDataAdapter {
-    async listConsumables(): Promise<Consumable[]> {
-        const { data, error } = await supabase
+    async listConsumables(params: any) {
+        // Note: 'category_id' is the foreign key.
+        // We select *, and expand the category to get the name.
+        const { data, error, count } = await supabase
             .from("consumable_item")
-            .select("*");
-        if (error) throw error;
-        return data || [];
+            .select(`
+                *,
+                consumable_category ( category_name )
+            `, { count: 'exact' });
+        if (error) {
+            console.error("List Consumables Error:", error);
+            throw error;
+        }
+        // Map the response to flatten the category name if needed
+        const items = (data || []).map((item: any) => ({
+            ...item,
+            category_name: item.consumable_category?.category_name
+        }));
+        return { items, total: count || 0 };
     }
 
     async createConsumable(data: Partial<Consumable>): Promise<Consumable> {

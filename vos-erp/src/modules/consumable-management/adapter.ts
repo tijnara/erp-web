@@ -2,7 +2,8 @@
 import { Consumable, ConsumableCategory } from "./types";
 
 export interface ConsumablesDataAdapter {
-    listConsumables(): Promise<Consumable[]>;
+    listConsumables(params: any): Promise<{ items: Consumable[]; total: number }>;
+
     createConsumable(data: Partial<Consumable>): Promise<Consumable>;
     updateConsumable(id: number, data: Partial<Consumable>): Promise<Consumable>;
     deleteConsumable(id: number): Promise<void>;
