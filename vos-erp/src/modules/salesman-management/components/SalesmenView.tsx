@@ -1,4 +1,3 @@
-// src/modules/salesman-management/components/SalesmenView.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -6,6 +5,7 @@ import type { DataProvider } from "../providers/DataProvider";
 import type { Salesman } from "../types";
 import { StatBar } from "./StatBar";
 import { SalesmanFormDialog } from "./SalesmanFormDialog";
+import { supabase } from "@/lib/supabase"; // Standard Top-Level Import
 
 export function SalesmenView({ provider }: { provider: DataProvider }) {
     const [q, setQ] = useState("");
@@ -19,165 +19,79 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     const [current, setCurrent] = useState<Salesman | null>(null);
     const [selected, setSelected] = useState<Salesman | null>(null);
 
-    // Branch name lookup map (id/code -> branch_name)
-    const [branchNames, setBranchNames] = useState<Record<string, string>>({});
-    // Operation name lookup map (id -> operation_name)
-    const [operationNames, setOperationNames] = useState<Record<string, string>>({});
-    // Company name lookup map (id/code -> company_name)
-    const [companyNames, setCompanyNames] = useState<Record<string, string>>({});
-    // Price type name lookup map (id -> price_type_name)
-    const [priceTypeNames, setPriceTypeNames] = useState<Record<string, string>>({});
-    // User name lookup map (user_id -> full name) for Encoder display
-    const [userNames, setUserNames] = useState<Record<string, string>>({});
+    // Consolidated Lookup Maps
+    const [lookups, setLookups] = useState({
+        branches: {} as Record<string, string>,
+        operations: {} as Record<string, string>,
+        companies: {} as Record<string, string>,
+        priceTypes: {} as Record<string, string>,
+        users: {} as Record<string, string>,
+    });
 
     const totalPages = useMemo(() => Math.ceil(total / limit), [total, limit]);
 
-    // Load branches once to resolve branch_name from numeric/code values
+    // 1. Consolidated Data Loading
     useEffect(() => {
-        let alive = true;
-        import('@/lib/supabase').then(({ supabase }) => {
-            supabase
-                .from("branches")
-                .select("id, branch_code, branch_name")
-                .then(({ data, error }) => {
-                    if (error) {
-                        console.warn("Could not load branches:", error.message);
-                        return;
-                    }
-                    if (!alive || !data) return;
-                    const map: Record<string, string> = {};
-                    for (const r of data) {
-                        const name: string = r.branch_name ?? String(r.id ?? r.branch_code ?? "");
-                        if (r.id != null) map[String(r.id)] = name;
-                        if (r.branch_code != null) map[String(r.branch_code)] = name;
-                    }
-                    setBranchNames(map);
-                });
-        }).catch(err => {
-            console.warn("Could not load branches:", err);
-        });
-        return () => {
-            alive = false;
-        };
-    }, []);
+        let mounted = true;
 
-    // Load operations once to resolve operation_name from numeric values
-    useEffect(() => {
-        let alive = true;
-        import('@/lib/supabase').then(({ supabase }) => {
-            supabase
-                .from("operations")
-                .select("id, operation_id, code, operation_name, name, operation_code")
-                .then(({ data, error }) => {
-                    if (error) {
-                        console.warn("Could not load operations:", error.message);
-                        return;
-                    }
-                    if (!alive || !data) return;
-                    const map: Record<string, string> = {};
-                    for (const r of data) {
-                        const id = r.id ?? r.operation_id ?? r.code;
-                        const name: string = r.operation_name ?? r.name ?? r.operation_code ?? String(id ?? "");
-                        if (id != null) map[String(id)] = name;
-                    }
-                    setOperationNames(map);
-                });
-        }).catch(err => {
-            console.warn("Could not load operations:", err);
-        });
-        return () => {
-            alive = false;
-        };
-    }, []);
+        async function fetchLookups() {
+            try {
+                // Run all requests in parallel
+                const [branchRes, opRes, compRes, priceRes, userRes] = await Promise.all([
+                    supabase.from("branches").select("id, branch_code, branch_name"),
+                    supabase.from("operation").select("id, operation_id, code, operation_name, name, operation_code"),
+                    supabase.from("companies").select("company_id, company_code, company_name"),
+                    supabase.from("price_types").select("price_type_id, price_type_name, name"),
+                    supabase.from("users").select("user_id, user_fname, user_lname, user_email")
+                ]);
 
-    // Load companies once to resolve company_name from numeric/code values
-    useEffect(() => {
-        let alive = true;
-        import('@/lib/supabase').then(({ supabase }) => {
-            supabase
-                .from("company")
-                .select("company_id, company_code, company_name")
-                .then(({ data, error }) => {
-                    if (error) {
-                        console.warn("Could not load companies:", error.message);
-                        return;
-                    }
-                    if (!alive || !data) return;
-                    const map: Record<string, string> = {};
-                    for (const r of data) {
-                        const name: string = r.company_name ?? String(r.company_id ?? r.company_code ?? "");
-                        if (r.company_id != null) map[String(r.company_id)] = name;
-                        if (r.company_code != null) map[String(r.company_code)] = name;
-                    }
-                    setCompanyNames(map);
-                });
-        }).catch(err => {
-            console.warn("Could not load companies:", err);
-        });
-        return () => {
-            alive = false;
-        };
-    }, []);
+                if (!mounted) return;
 
-    // Load price types once to resolve price_type_name from numeric values
-    useEffect(() => {
-        let alive = true;
-        import('@/lib/supabase').then(({ supabase }) => {
-            supabase
-                .from("price_types")
-                .select("price_type_id, id, price_type_name, name")
-                .then(({ data, error }) => {
-                    if (error) {
-                        console.warn("Could not load price types:", error.message);
-                        return;
-                    }
-                    if (!alive || !data) return;
+                // Helper to build maps safely
+                const buildMap = (data: any[] | null, idKeys: string[], nameKeys: string[]) => {
                     const map: Record<string, string> = {};
-                    for (const r of data) {
-                        const id = r.price_type_id ?? r.id;
-                        const name: string = r.price_type_name ?? r.name ?? String(id ?? "");
-                        if (id != null) map[String(id)] = name;
+                    if (!data) return map;
+                    for (const item of data) {
+                        const id = idKeys.map(k => item[k]).find(v => v != null);
+                        const name = nameKeys.map(k => item[k]).find(v => v != null);
+                        if (id != null) map[String(id)] = String(name || id);
                     }
-                    setPriceTypeNames(map);
-                });
-        }).catch(err => {
-            console.warn("Could not load price types:", err);
-        });
-        return () => {
-            alive = false;
-        };
-    }, []);
+                    return map;
+                };
 
-    // Load users once to resolve encoder name from numeric values
-    useEffect(() => {
-        let alive = true;
-        import('@/lib/supabase').then(({ supabase }) => {
-            supabase
-                .from("users")
-                .select("user_id, id, user_fname, user_lname, user_email")
-                .then(({ data, error }) => {
-                    if (error) {
-                        console.warn("Could not load users:", error.message);
-                        return;
-                    }
-                    if (!alive || !data) return;
-                    const map: Record<string, string> = {};
-                    for (const u of data) {
-                        const id = u.user_id ?? u.id;
-                        if (id != null) {
-                            map[String(id)] = [u.user_fname, u.user_lname].filter(Boolean).join(" ").trim() || u.user_email || String(id);
+                setLookups({
+                    branches: buildMap(branchRes.data, ['id', 'branch_code'], ['branch_name']),
+                    operations: buildMap(opRes.data, ['id', 'operation_id', 'code'], ['operation_name', 'name', 'operation_code']),
+                    companies: buildMap(compRes.data, ['company_id', 'company_code'], ['company_name']),
+                    priceTypes: buildMap(priceRes.data, ['price_type_id'], ['price_type_name', 'name']),
+                    users: (userRes.data || []).reduce((acc, u) => {
+
+
+                        const id = u.user_id;
+                        if (id) {
+                            acc[String(id)] = [u.user_fname, u.user_lname].filter(Boolean).join(" ") || u.user_email || String(id);
                         }
-                    }
-                    setUserNames(map);
+                        return acc;
+                    }, {} as Record<string, string>)
                 });
-        }).catch(err => {
-            console.warn("Could not load users:", err);
-        });
-        return () => {
-            alive = false;
-        };
+
+                // Check for critical connection errors
+                const errors = [branchRes, opRes, compRes, priceRes, userRes].map(r => r.error).filter(Boolean);
+                if (errors.length > 0) {
+                    console.error("Lookup loading errors:", errors);
+                    // Optional: toast.error("Failed to load some reference data");
+                }
+
+            } catch (error) {
+                console.error("Critical error loading lookups:", error);
+            }
+        }
+
+        fetchLookups();
+        return () => { mounted = false; };
     }, []);
 
+    // 2. Main Data Refresh
     async function refresh() {
         const offset = (page - 1) * limit;
         const { items, total } = await provider.listSalesmen({ q, limit, offset });
@@ -186,198 +100,116 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
     }
 
     useEffect(() => {
-        let alive = true;
-        const offset = (page - 1) * limit;
-        provider.listSalesmen({ q, limit, offset }).then(({ items, total }) => {
-            if (!alive) return;
-            setRows(items);
-            setTotal(total);
-        });
-        return () => {
-            alive = false;
-        };
-    }, [q, page, provider]);
+        refresh();
+    }, [q, page]); // Removed provider dependency to prevent loops if provider object is unstable
 
+    // Stats Calculation
     const stats = useMemo(() => {
         const active = rows.filter((r) => r.isActive !== false).length;
-        const inactive = rows.length - active;
-        const territories = new Set(rows.map((r) => r.territory ?? "-")).size;
-        return { total, active, inactive, territories };
+        return {
+             total,
+             active,
+             inactive: rows.length - active,
+             territories: new Set(rows.map((r) => r.territory ?? "-")).size
+         };
     }, [rows, total]);
 
-    function displayBranch(val: any): string {
+    // Simple Helpers using the unified state
+    const getLookup = (map: Record<string, string>, val: any) => {
         if (val === null || val === undefined || val === "") return "-";
-        const key = String(val);
-        return branchNames[key] ?? String(val);
-    }
-
-    function displayOperation(val: any): string {
-        if (val === null || val === undefined || val === "") return "-";
-        const key = String(val);
-        return operationNames[key] ?? String(val);
-    }
-
-    function displayCompany(val: any): string {
-        if (val === null || val === undefined || val === "") return "-";
-        const key = String(val);
-        return companyNames[key] ?? String(val);
-    }
-
-    function displayPriceType(val: any): string {
-        if (val === null || val === undefined || val === "") return "-";
-        const key = String(val);
-        return priceTypeNames[key] ?? String(val);
-    }
-
-    function displayEncoder(val: any): string {
-        if (val === null || val === undefined || val === "") return "-";
-        const key = String(val);
-        const name = userNames[key];
-        return name ? `${name} (ID: ${key})` : String(val);
-    }
+        return map[String(val)] ?? String(val);
+    };
 
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold">Salesmen</h2>
                 <button
-                    className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
-                    onClick={() => {
-                        setMode("create");
-                        setCurrent(null);
-                        setOpen(true);
-                    }}
+                    className="px-3 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:opacity-90 transition"
+                    onClick={() => { setMode("create"); setCurrent(null); setOpen(true); }}
                 >
                     + Add Salesman
                 </button>
             </div>
 
-            {!selected && (
-                <input
-                    placeholder="Search by name, code, email, phone, or territory…"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                />
-            )}
-
             {!selected ? (
-                <div className="overflow-hidden border border-gray-200 rounded-xl">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600">
-                            <tr>
-                                <th className="text-left p-3 font-medium">Salesman Name</th>
-                                <th className="text-left p-3 font-medium">Salesman Code</th>
-                                <th className="text-left p-3 font-medium">Branch</th>
-                                <th className="text-left p-3 font-medium">Status</th>
-                                <th className="text-left p-3 font-medium">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((r) => (
-                                <tr
-                                    key={r.id}
-                                    className="border-t hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => setSelected(r)}
-                                >
-                                    <td className="p-3">{r.name}</td>
-                                    <td className="p-3">{r.code ?? "-"}</td>
-                                    <td className="p-3">{displayBranch(r.branch_code)}</td>
-                                    <td className="p-3">
-                                        <span
-                                            className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                r.isActive
-                                                    ? "bg-green-100 text-green-800"
-                                                    : "bg-red-100 text-red-800"
-                                            }`}
-                                        >
-                                            {r.isActive ? "Active" : "Inactive"}
-                                        </span>
-                                    </td>
-                                    <td className="p-3">
-                                        <div className="flex gap-2">
+                <>
+                    <input
+                        placeholder="Search..."
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                    />
+                    <div className="overflow-hidden border border-gray-200 rounded-xl">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th className="text-left p-3 font-medium">Name</th>
+                                    <th className="text-left p-3 font-medium">Code</th>
+                                    <th className="text-left p-3 font-medium">Branch</th>
+                                    <th className="text-left p-3 font-medium">Status</th>
+                                    <th className="text-left p-3 font-medium">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((r) => (
+                                    <tr key={r.id} className="border-t hover:bg-gray-50 cursor-pointer" onClick={() => setSelected(r)}>
+                                        <td className="p-3">{r.name}</td>
+                                        <td className="p-3">{r.code ?? "-"}</td>
+                                        <td className="p-3">{getLookup(lookups.branches, r.branch_code)}</td>
+                                        <td className="p-3">
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${r.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                                {r.isActive ? "Active" : "Inactive"}
+                                            </span>
+                                        </td>
+                                        <td className="p-3">
                                             <button
-                                                className="text-xs px-2 py-1 rounded border"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setMode("edit");
-                                                    setCurrent(r);
-                                                    setOpen(true);
-                                                }}
+                                                className="text-xs px-2 py-1 rounded border hover:bg-gray-100"
+                                                onClick={(e) => { e.stopPropagation(); setMode("edit"); setCurrent(r); setOpen(true); }}
                                             >
                                                 Edit
                                             </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {rows.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="p-6 text-center text-gray-500">
-                                        No salesmen found.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                    <div className="flex justify-between items-center p-3 border-t">
-                        <div className="text-sm text-gray-500">
-                            Page {page} of {totalPages} ({total} items)
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                className="text-sm px-3 py-1 rounded border disabled:opacity-50"
-                                disabled={page <= 1}
-                                onClick={() => setPage(p => p - 1)}
-                            >
-                                Previous
-                            </button>
-                            <button
-                                className="text-sm px-3 py-1 rounded border disabled:opacity-50"
-                                disabled={page >= totalPages}
-                                onClick={() => setPage(p => p + 1)}
-                            >
-                                Next
-                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {rows.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-gray-500">No records found.</td></tr>}
+                            </tbody>
+                        </table>
+                        {/* Pagination Controls */}
+                        <div className="flex justify-between items-center p-3 border-t">
+                             <span className="text-sm text-gray-500">Page {page} of {totalPages || 1}</span>
+                             <div className="flex gap-2">
+                                 <button className="px-3 py-1 border rounded text-sm disabled:opacity-50" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+                                 <button className="px-3 py-1 border rounded text-sm disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+                             </div>
                         </div>
                     </div>
-                </div>
+                </>
             ) : (
                 <div className="overflow-hidden border border-gray-200 rounded-xl">
                     <div className="flex items-center justify-between p-3 bg-gray-50 border-b">
                         <div className="font-medium">Salesman Details</div>
                         <div className="flex gap-2">
-                            <button
-                                className="text-xs px-2 py-1 rounded border"
-                                onClick={() => setSelected(null)}
-                            >
-                                Back to list
-                            </button>
-                            <button
-                                className="text-xs px-2 py-1 rounded border"
-                                onClick={() => {
-                                    setMode("edit");
-                                    setCurrent(selected);
-                                    setOpen(true);
-                                }}
-                            >
-                                Edit
-                            </button>
+                            <button className="text-xs px-2 py-1 rounded border bg-white" onClick={() => setSelected(null)}>Back</button>
+                            <button className="text-xs px-2 py-1 rounded border bg-white" onClick={() => { setMode("edit"); setCurrent(selected); setOpen(true); }}>Edit</button>
                         </div>
                     </div>
                     <table className="w-full text-sm">
                         <tbody>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Code</td><td className="p-3">{selected.code ?? "-"}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Name</td><td className="p-3">{selected.name ?? "-"}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Employee ID</td><td className="p-3">{selected.employee_id ?? "-"}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Truck Plate</td><td className="p-3">{selected.truck_plate ?? "-"}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Branch</td><td className="p-3">{displayBranch(selected.branch_code ?? selected.territory)}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Operation</td><td className="p-3">{displayOperation(selected.operation)}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Company</td><td className="p-3">{displayCompany(selected.company_code)}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Price Type</td><td className="p-3">{displayPriceType(selected.price_type)}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Active</td><td className="p-3">{selected.isActive !== false ? "Yes" : "No"}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Encoder</td><td className="p-3">{displayEncoder(selected.encoder_id)}</td></tr>
-                            <tr className="border-t"><td className="p-3 font-medium text-gray-600">Modified Date</td><td className="p-3">{selected.hireDate ?? "-"}</td></tr>
+                            {[
+                                ["Name", selected.name],
+                                ["Code", selected.code],
+                                ["Branch", getLookup(lookups.branches, selected.branch_code ?? selected.territory)],
+                                ["Operation", getLookup(lookups.operations, selected.operation)],
+                                ["Company", getLookup(lookups.companies, selected.company_code)],
+                                ["Price Type", getLookup(lookups.priceTypes, selected.price_type)],
+                                ["Encoder", getLookup(lookups.users, selected.encoder_id)],
+                            ].map(([label, value]) => (
+                                <tr key={label} className="border-t">
+                                    <td className="p-3 font-medium text-gray-600 w-1/3">{label}</td>
+                                    <td className="p-3">{value ?? "-"}</td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -391,19 +223,14 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
                 initial={current ?? undefined}
                 onClose={() => setOpen(false)}
                 onSubmit={async (dto) => {
-                    if (mode === "create") {
-                        await provider.createSalesman(dto);
-                    } else if (current) {
-                        await provider.updateSalesman(current.id, dto);
-                    }
-                    await refresh();
-                    if (selected) {
-                        try {
-                            const latest = await provider.getSalesman(selected.id);
-                            setSelected(latest);
-                        } catch (e) {
-                            // ignore
-                        }
+                    try {
+                        if (mode === "create") await provider.createSalesman(dto);
+                        else if (current) await provider.updateSalesman(current.id, dto);
+                        await refresh();
+                        setOpen(false); // Close on success
+                    } catch (e) {
+                        console.error("Error saving salesman:", e);
+                        alert("Failed to save record. Please check console.");
                     }
                 }}
             />
