@@ -38,11 +38,11 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
             try {
                 // Run all requests in parallel
                 const [branchRes, opRes, compRes, priceRes, userRes] = await Promise.all([
-                    supabase.from("branches").select("id, branch_code, branch_name"),
-                    supabase.from("operation").select("id, operation_id, code, operation_name, name, operation_code"),
-                    supabase.from("companies").select("company_id, company_code, company_name"),
-                    supabase.from("price_types").select("price_type_id, price_type_name, name"),
-                    supabase.from("users").select("user_id, user_fname, user_lname, user_email")
+                    supabase.from("branches").select("id,branch_code,branch_name"),
+                    supabase.from("operations").select("id,operation_name,code"),
+                    supabase.from("companies").select("company_id,company_code,company_name"),
+                    supabase.from("price_types").select("price_type_id,price_type_name"),
+                    supabase.from("users").select("user_id,user_fname,user_lname,user_email")
                 ]);
 
                 if (!mounted) return;
@@ -61,11 +61,10 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
 
                 setLookups({
                     branches: buildMap(branchRes.data, ['id', 'branch_code'], ['branch_name']),
-                    operations: buildMap(opRes.data, ['id', 'operation_id', 'code'], ['operation_name', 'name', 'operation_code']),
-                    companies: buildMap(compRes.data, ['company_id', 'company_code'], ['company_name']),
-                    priceTypes: buildMap(priceRes.data, ['price_type_id'], ['price_type_name', 'name']),
+                    operations: buildMap(opRes.data, ['id'], ['operation_name', 'code']),
+                    companies: buildMap(compRes.data, ['company_id'], ['company_name', 'company_code']),
+                    priceTypes: buildMap(priceRes.data, ['price_type_id'], ['price_type_name']),
                     users: (userRes.data || []).reduce((acc, u) => {
-
 
                         const id = u.user_id;
                         if (id) {
