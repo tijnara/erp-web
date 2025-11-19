@@ -4,9 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { StatBar } from "./StatBar";
 import { Label } from "@/components/ui/label";
-import { HttpDataProvider } from "../providers/HttpDataProvider";
 
 interface Consumable {
     item_id: number;
@@ -31,18 +29,16 @@ interface ConsumableCategory {
 
 const PAGE_SIZE = 20;
 
-export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
+export function ConsumablesView({ provider }: { provider: any }) {
     const [consumables, setConsumables] = useState<Consumable[]>([]);
     const [categories, setCategories] = useState<ConsumableCategory[]>([]);
     const [loading, setLoading] = useState(true);
     const [q, setQ] = useState("");
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
-
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [currentId, setCurrentId] = useState<number | null>(null);
-
     const [form, setForm] = useState<Partial<Consumable>>({
         item_code: "",
         item_name: "",
@@ -55,25 +51,43 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
         is_active: 1,
     });
 
+    // 1. Load Categories Once
     useEffect(() => {
         let alive = true;
-        const offset = (page - 1) * PAGE_SIZE;
-        setLoading(true);
-        Promise.all([
-            provider.listConsumables({ q, limit: PAGE_SIZE, offset }),
-            provider.listCategories()
-        ])
-            .then(([result, cats]) => {
-                if (!alive) return;
-                setConsumables(result.items);
-                setCategories(cats as unknown as ConsumableCategory[]);
-                setTotal(result.total);
-            })
-            .catch((err) => console.error("Error loading:", err))
-            .finally(() => setLoading(false));
-        return () => {
-            alive = false;
-        };
+        provider.listCategories().then((cats: ConsumableCategory[]) => {
+            if (alive) setCategories(cats);
+        });
+        return () => { alive = false; };
+    }, [provider]);
+
+    // 2. Main Data Loop (Server-Side Pagination)
+    useEffect(() => {
+        let alive = true;
+        async function loadData() {
+            setLoading(true);
+            try {
+                const offset = (page - 1) * PAGE_SIZE;
+                // 1. Fetch Consumables (with server-side search & pagination)
+                const { items, total: totalCount } = await provider.listConsumables({
+                    q,
+                    limit: PAGE_SIZE,
+                    offset
+                });
+                // 2. Fetch Categories (for the dropdown/table display)
+                const cats = await provider.listCategories();
+                if (alive) {
+                    setConsumables(items);
+                    setTotal(totalCount);
+                    setCategories(cats);
+                }
+            } catch (err) {
+                console.error("Error loading data:", err);
+            } finally {
+                if (alive) setLoading(false);
+            }
+        }
+        loadData();
+        return () => { alive = false; };
     }, [provider, q, page]);
 
     const pageCount = useMemo(() => Math.ceil(total / PAGE_SIZE) || 1, [total]);
@@ -83,47 +97,18 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
         return c ? c.category_name : "—";
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Are you sure you want to delete this consumable?")) return;
-        try {
-            await provider.deleteConsumable(id);
-            setConsumables((prev) => prev.filter((i) => i.item_id !== id));
-        } catch (err) {
-            console.error("Delete failed:", err);
-            alert("Failed to delete consumable.");
-        }
-    };
-
     const handleSave = async () => {
         try {
-            if (!form.item_name || !form.item_code || !form.unit_of_measure || !form.unit_cost) {
-                alert("Please fill in all required fields.");
-                return;
-            }
             if (editMode && currentId) {
-                const updated = await provider.updateConsumable(currentId, form);
-                setConsumables((prev) =>
-                    prev.map((item) => (item.item_id === currentId ? (updated as Consumable) : item))
-                );
+                await provider.updateConsumable(currentId, form);
             } else {
-                const created = await provider.createConsumable(form);
-                setConsumables((prev) => [...prev, created as unknown as Consumable]);
+                await provider.createConsumable(form);
             }
-
             setIsDialogOpen(false);
-            setEditMode(false);
-            setCurrentId(null);
-            setForm({
-                item_code: "",
-                item_name: "",
-                item_description: "",
-                category_id: 0,
-                unit_of_measure: "",
-                unit_cost: "",
-                brand: "",
-                supplier_id: null,
-                is_active: 1,
-            });
+            setPage(1); // Force reload to first page
+            // Optionally, you can call refresh() if you wrap loadData in useCallback
+            // For now, reload the page to ensure fresh data
+            window.location.reload();
         } catch (err) {
             console.error("Save failed:", err);
             alert("Failed to save consumable.");
@@ -146,6 +131,7 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
                 <h2 className="text-lg font-semibold">Consumable Items</h2>
                 <Button
                     onClick={() => {
+                        setEditMode(false);
                         setForm({
                             item_code: "",
                             item_name: "",
@@ -157,7 +143,6 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
                             supplier_id: null,
                             is_active: 1,
                         });
-                        setEditMode(false);
                         setIsDialogOpen(true);
                     }}
                 >
@@ -184,9 +169,7 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
                         <th className="text-left p-3 font-medium">Name</th>
                         <th className="text-left p-3 font-medium">Category</th>
                         <th className="text-left p-3 font-medium">Unit</th>
-                        <th className="text-left p-3 font-medium">Cost</th>
                         <th className="text-left p-3 font-medium">Brand</th>
-                        <th className="text-left p-3 font-medium">Date Added</th>
                         <th className="text-left p-3 font-medium">Actions</th>
                     </tr>
                     </thead>
@@ -196,56 +179,37 @@ export function ConsumablesView({ provider }: { provider: HttpDataProvider }) {
                             key={item.item_id}
                             className="border-b border-gray-200 hover:bg-gray-50 cursor-pointer"
                         >
-                            <td className="p-3">{item.item_name}</td>
+                            <td className="p-3">
+                                <div className="font-medium">{item.item_name}</div>
+                                <div className="text-xs text-gray-500">{item.item_code}</div>
+                            </td>
                             <td className="p-3">{getCategoryName(item.category_id)}</td>
                             <td className="p-3">{item.unit_of_measure}</td>
-                            <td className="p-3">{item.unit_cost}</td>
                             <td className="p-3">{item.brand}</td>
-                            <td className="p-3">{new Date(item.date_added).toLocaleString()}</td>
-                            <td className="p-3 flex items-center gap-2">
+                            <td className="p-3">
                                 <Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
                                     Edit
                                 </Button>
                             </td>
                         </tr>
                     ))}
+                    {consumables.length === 0 && !loading && <tr><td colSpan={5} className="p-4 text-center">No items found.</td></tr>}
                     </tbody>
                 </table>
             </div>
 
             {/* Pagination */}
             <div className="flex justify-between items-center mt-4">
-                <div>
-                    <p className="text-sm text-muted-foreground">
-                        Showing {consumables.length} of {total} items
-                    </p>
-                </div>
+                <span className="text-sm text-gray-500">Showing {consumables.length} of {total}</span>
                 <div className="flex gap-2">
-                    <Button
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="px-3 py-1 rounded-lg border text-sm font-semibold disabled:opacity-50"
-                    >
-                        Previous
-                    </Button>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm">
-                            Page {page} of {pageCount}
-                        </span>
-                    </div>
-                    <Button
-                        onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                        disabled={page === pageCount}
-                        className="px-3 py-1 rounded-lg border text-sm font-semibold disabled:opacity-50"
-                    >
-                        Next
-                    </Button>
+                    <Button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
+                    <Button disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}>Next</Button>
                 </div>
             </div>
 
             {/* ADD/EDIT DIALOG */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent>
                     <DialogHeader>
                         <DialogTitle>{editMode ? "Edit Consumable" : "Add New Consumable"}</DialogTitle>
                     </DialogHeader>
