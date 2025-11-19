@@ -7,7 +7,6 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@directus/sdk": "^20.1.0",
     "@hookform/resolvers": "^5.2.2",
     "@supabase/supabase-js": "^2.82.0",
     "axios": "^1.12.2",
@@ -21,6 +20,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.2",
+    "supabase": "^2.58.5",
     "typescript": "^5.5.3"
   },
   "private": true

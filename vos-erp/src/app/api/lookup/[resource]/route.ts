@@ -3,12 +3,11 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies as nextCookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 
-// Default to the provided Directus server if the env var is not set.
-const DIRECTUS = process.env.NEXT_PUBLIC_DIRECTUS_URL ?? "http://100.119.3.44:8090";
 const ACCESS = process.env.AUTH_ACCESS_COOKIE ?? "vos_access";
 
-// map your resources -> directus collection + fields + mapping
+
 const MAP: Record<
     string,
     { path: string; fields: string; nameField: string; idField: string; extra?: string[] }
@@ -32,7 +31,6 @@ const MAP: Record<
 };
 
 export async function GET(req: NextRequest, context: { params: Promise<{ resource: string }> }) {
-    if (!DIRECTUS) return NextResponse.json([], { status: 200 });
     const { resource } = await context.params;
     const cfg = MAP[resource];
     if (!cfg) return NextResponse.json([], { status: 200 });
@@ -43,31 +41,26 @@ export async function GET(req: NextRequest, context: { params: Promise<{ resourc
     const cookieStore = await nextCookies();
     const auth = cookieStore.get(ACCESS)?.value;
 
-    const parts: string[] = [
-        `fields=${encodeURIComponent(cfg.fields)}`,
-        `limit=20`,
-        `sort=${encodeURIComponent(cfg.nameField)}`,
-    ];
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { global: { headers: { Authorization: `Bearer ${auth}` } } }
+    );
+
+    let query = supabase.from(cfg.path).select(cfg.fields).limit(20).order(cfg.nameField);
 
     if (q.trim()) {
-        // deep filter on the "name" field
-        parts.push(
-            `filter[${cfg.nameField}][_icontains]=${encodeURIComponent(q.trim())}`
-        );
+        query = query.ilike(cfg.nameField, `%${q.trim()}%`);
     }
 
-    const r = await fetch(`${DIRECTUS}/items/${cfg.path}?${parts.join("&")}` , {
-        headers: auth ? {Authorization: `Bearer ${auth}`} : undefined,
-        cache: "no-store",
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-        // don't explode the UI on lookup failures—just return empty
+    const { data, error } = await query;
+
+    if (error || !data) {
+        console.error(error);
         return NextResponse.json([], { status: 200 });
     }
 
-    const data = (j?.data ?? []) as any[];
-    const options = data.map((row) => {
+    const options = (data as any[]).map((row) => {
         const id = row[cfg.idField];
         const name = row[cfg.nameField];
         const meta: any = {};

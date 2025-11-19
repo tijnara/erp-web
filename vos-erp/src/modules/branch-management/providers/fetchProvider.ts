@@ -1,61 +1,26 @@
-import { supabase } from "../../../lib/supabase";
-import type { Branch } from "../types";
+import { createSupabaseProvider } from "../../../lib/createSupabaseProvider";
+import type { Branch, UpsertBranchDTO } from "../types";
+import type { Database } from "../../../types/supabase";
 
-export function fetchProvider() {
-    async function listBranches({ q = "", limit = 20, offset = 0 } = {}) {
-        let query = supabase
-            .from("branches")
-            .select("*", { count: "exact" })
-            .range(offset, offset + limit - 1);
-        if (q) {
-            query = query.or(`branch_name.ilike.%${q}%,branch_code.ilike.%${q}%`);
-        }
-        const { data, error, count } = await query;
-        if (error) {
-            console.error("Failed to list branches:", error);
-            return { items: [], total: 0 };
-        }
-        return { items: data || [], total: count || 0 };
-    }
+type BranchRow = Database["public"]["Tables"]["branches"]["Row"];
 
-    async function getBranch(id: number | string) {
-        const { data, error } = await supabase
-            .from("branches")
-            .select("*")
-            .eq("id", id)
-            .single();
-        if (error) throw error;
-        return data;
-    }
+// Mapper from the database row to the UI-facing type.
+// In this case, they are very similar, but this provides a layer for transformation.
+const toUI = (row: BranchRow): Branch => ({
+    ...row,
+    branch_name: row.branch_name ?? "", // Ensure branch_name is not null
+});
 
-    async function createBranch(data: Partial<Branch>) {
-        const { data: newBranch, error } = await supabase
-            .from("branches")
-            .insert(data)
-            .select()
-            .single();
-        if (error) throw error;
-        return newBranch;
-    }
+// Mapper from the UI-facing DTO to the database-insertable type.
+const toAPI = (dto: Partial<UpsertBranchDTO>): Partial<BranchRow> => {
+    // The DTO can be directly used for insertion/update in this case.
+    return dto;
+};
 
-    async function updateBranch(id: number | string, data: Partial<Branch>) {
-        const { data: updatedBranch, error } = await supabase
-            .from("branches")
-            .update(data)
-            .eq("id", id)
-            .select()
-            .single();
-        if (error) throw error;
-        return updatedBranch;
-    }
+export const fetchProvider = () => createSupabaseProvider<Branch, UpsertBranchDTO>(
+    "branches",
+    toUI,
+    toAPI,
+    ["branch_name", "branch_code"] // Columns to search in the list function
+);
 
-    async function deleteBranch(id: number | string) {
-        const { error } = await supabase
-            .from("branches")
-            .delete()
-            .eq("id", id);
-        if (error) throw error;
-    }
-
-    return { listBranches, getBranch, createBranch, updateBranch, deleteBranch };
-}
