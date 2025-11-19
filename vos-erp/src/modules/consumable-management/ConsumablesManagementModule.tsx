@@ -15,14 +15,22 @@ export function ConsumablesManagementModule() {
     const [dataReady, setDataReady] = useState(false);
     useEffect(() => {
         let alive = true;
-        provider.listCategories().then(() => alive && setDataReady(true));
-        return () => {
-            alive = false;
-        };
+        async function load() {
+            try {
+                await provider.listCategories();
+            } catch (e) {
+                console.warn("Categories table might be missing or empty", e);
+            } finally {
+                if (alive) setDataReady(true);
+            }
+        }
+        load();
+        return () => { alive = false; };
     }, [provider]);
 
     if (!dataReady) {
-        return <p>Loading data...</p>;
+        // Add a small loading indicator instead of just text
+        return <div className="p-4 text-gray-500">Initializing module...</div>;
     }
 
     return (
