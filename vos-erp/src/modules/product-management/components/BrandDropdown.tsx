@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { itemsUrl } from "../../../config/api";
 
 export function BrandDropdown({
   value,
-  onChange,
+  onChangeAction,
 }: {
   value: { id: string | number; name: string } | null;
-  onChange: (value: { id: string | number; name: string } | null) => void;
+  onChangeAction: (value: { id: string | number; name: string } | null) => void;
 }) {
   const [brands, setBrands] = useState<{ id: string | number; name: string }[]>(
     []
@@ -19,16 +18,13 @@ export function BrandDropdown({
   useEffect(() => {
     async function fetchBrands() {
       try {
-        const response = await fetch(itemsUrl("brand"));
+        const response = await fetch("/api/lookup/brand");
         if (!response.ok) {
-          throw new Error("Failed to fetch brands");
+          setError("Failed to fetch brands");
+          return;
         }
         const result = await response.json();
-        const formattedBrands = result.data.map((brand: any) => ({
-          id: brand.brand_id,
-          name: brand.brand_name,
-        }));
-        setBrands(formattedBrands);
+        setBrands(result);
       } catch (err: any) {
         console.error(err);
         setError(err.message);
@@ -43,18 +39,18 @@ export function BrandDropdown({
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = e.target.value;
     const selectedBrand = brands.find(
-      (brand) => brand.id.toString() === selectedId
+      (brand) => brand.id.toString() === selectedId.toString()
     );
-    onChange(selectedBrand || null);
+    onChangeAction(selectedBrand || null);
   };
 
   return (
     <div>
       <label className="text-sm">Brand</label>
       {loading ? (
-        <p>Loading brands...</p>
+        <p className="text-xs text-gray-500">Loading...</p>
       ) : error ? (
-        <p className="text-red-500">{error}</p>
+        <p className="text-xs text-red-500">Error loading brands</p>
       ) : (
         <select
           className="mt-1 w-full rounded-md border px-3 py-2 bg-white dark:bg-zinc-900"

@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { itemsUrl } from "../../../config/api";
 
 export function CategoryDropdown({
   value,
-  onChange,
+  onChangeAction,
 }: {
   value: { id: string | number; name: string } | null;
-  onChange: (value: { id: string | number; name: string } | null) => void;
+  onChangeAction: (value: { id: string | number; name: string } | null) => void;
 }) {
   const [categories, setCategories] = useState<{ id: string | number; name: string }[]>(
     []
@@ -19,16 +18,13 @@ export function CategoryDropdown({
   useEffect(() => {
     async function fetchCategories() {
       try {
-        const response = await fetch(itemsUrl("categories"));
+        const response = await fetch("/api/lookup/categories");
         if (!response.ok) {
-          throw new Error("Failed to fetch categories");
+          setError("Failed to fetch categories");
+          return;
         }
         const result = await response.json();
-        const formattedCategories = result.data.map((category: any) => ({
-          id: category.category_id,
-          name: category.category_name,
-        }));
-        setCategories(formattedCategories);
+        setCategories(result);
       } catch (err: any) {
         console.error(err);
         setError(err.message);
@@ -43,9 +39,9 @@ export function CategoryDropdown({
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = e.target.value;
     const selectedCategory = categories.find(
-      (category) => category.id.toString() === selectedId
+      (category) => category.id.toString() === selectedId.toString()
     );
-    onChange(selectedCategory || null);
+    onChangeAction(selectedCategory || null);
   };
 
   return (

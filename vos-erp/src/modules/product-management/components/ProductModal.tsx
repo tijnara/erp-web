@@ -8,20 +8,19 @@ import type { Product, UpsertProductDTO } from "../types";
 import { BrandDropdown } from "./BrandDropdown";
 import { CategoryDropdown } from "./CategoryDropdown";
 import { useSession } from "@/hooks/use-session";
-import { itemsUrl } from "@/config/api";
 
 export function ProductModal({
     open,
-    onCloseAction,
+    onClose,
     provider,
     product,    // if present → Edit; otherwise → Add
-    onSavedAction,    // callback to refresh list
+    onSaved,
 }: {
     open: boolean;
-    onCloseAction: () => void;
+    onClose: () => void;
     provider: DataProvider;
     product?: Product | null;
-    onSavedAction?: (saved: Product) => void;
+    onSaved?: (saved: Product) => void;
 }) {
     const { session } = useSession();
     const isEdit = !!product;
@@ -47,19 +46,13 @@ export function ProductModal({
 
     useEffect(() => {
         if (!open) return;
-
-        // Fetch unit options when the modal opens
-        fetch(itemsUrl("units?fields=unit_id,unit_name"))
+        fetch("/api/lookup/units")
             .then((response) => {
                 if (!response.ok) throw new Error("Network response was not ok");
                 return response.json();
             })
             .then((data) => {
-                const options = (data.data || []).map((unit: any) => ({
-                    id: unit.unit_id,
-                    name: unit.unit_name,
-                }));
-                setUnitOptions(options);
+                setUnitOptions(data || []);
             })
             .catch((error) => {
                 console.error("Failed to fetch unit options:", error);
@@ -119,8 +112,8 @@ export function ProductModal({
             } else {
                 saved = await provider.createProduct(payload);
             }
-            onSavedAction?.(saved);
-            onCloseAction();
+            onSaved?.(saved);
+            onClose();
         } catch (e: any) {
             setErr(e?.message || "Save failed");
         } finally {
@@ -131,7 +124,7 @@ export function ProductModal({
     return (
         <Modal
             open={open}
-            onClose={() => !saving && onCloseAction()}
+            onClose={() => !saving && onClose()}
             title={isEdit ? "Edit Product" : "Add Product"}
             width="max-w-2xl"
         >
@@ -248,11 +241,11 @@ export function ProductModal({
                     </div>
                     <BrandDropdown
                         value={brand}
-                        onChange={(o) => setBrand(o)}
+                        onChangeAction={(o: { id: string | number; name: string } | null) => setBrand(o)}
                     />
                     <CategoryDropdown
                         value={category}
-                        onChange={(o) => setCategory(o)}
+                        onChangeAction={(o: { id: string | number; name: string } | null) => setCategory(o)}
                     />
                 </div>
 
@@ -262,7 +255,7 @@ export function ProductModal({
                     <button
                         type="button"
                         className="px-3 py-2 rounded-md border"
-                        onClick={onCloseAction}
+                        onClick={onClose}
                         disabled={saving}
                     >
                         Cancel
