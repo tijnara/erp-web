@@ -95,20 +95,19 @@ export class HttpDataProvider implements DataProvider {
         priceTypeId: number | string,
         value: number | null
     ): Promise<ProductPrice | null> {
-        // IMPORTANT: Requires a unique constraint on the table for (product_id, price_type_id)
-        //
-        // ALTER TABLE product_per_price_type
-        // ADD CONSTRAINT product_price_type_unique
-        // UNIQUE (product_id, price_type_id);
-
+        // REFACTORED: Uses .upsert() for atomic create/update.
+        // Requires Unique Constraint on DB: UNIQUE(product_id, price_type_id)
         const { data, error } = await supabase
             .from("product_per_price_type")
-            .upsert({
-                product_id: Number(productId),
-                price_type_id: Number(priceTypeId),
-                price: value,
-                status: 'active'
-            }, { onConflict: 'product_id,price_type_id' })
+            .upsert(
+                {
+                    product_id: Number(productId),
+                    price_type_id: Number(priceTypeId),
+                    price: value,
+                    status: 'active'
+                },
+                { onConflict: 'product_id, price_type_id' }
+            )
             .select()
             .single();
 
