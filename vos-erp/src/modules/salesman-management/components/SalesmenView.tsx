@@ -38,7 +38,7 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
         import('@/lib/supabase').then(({ supabase }) => {
             supabase
                 .from("branches")
-                .select("id, branch_code, branch_name, branch_description")
+                .select("id, branch_code, branch_name")
                 .then(({ data, error }) => {
                     if (error) {
                         console.warn("Could not load branches:", error.message);
@@ -47,7 +47,7 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
                     if (!alive || !data) return;
                     const map: Record<string, string> = {};
                     for (const r of data) {
-                        const name: string = r.branch_name ?? r.branch_description ?? String(r.id ?? r.branch_code ?? "");
+                        const name: string = r.branch_name ?? String(r.id ?? r.branch_code ?? "");
                         if (r.id != null) map[String(r.id)] = name;
                         if (r.branch_code != null) map[String(r.branch_code)] = name;
                     }
