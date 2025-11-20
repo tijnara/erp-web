@@ -64,10 +64,12 @@ const MAP: Record<
         nameField: "price_type_name",
         idField: "price_type_id"
     }
-    // transaction_types: {  // Table doesn't exist in Supabase
-    //     path: "transaction_types",
-    //     fields: "id,transaction_type",
-    //     nameField: "transaction_type",
+    // NOTE: transaction_type table doesn't exist in Supabase yet
+    // When ready, uncomment and create the table:
+    // transaction_type: {
+    //     path: "transaction_type",
+    //     fields: "id,name",
+    //     nameField: "name",
     //     idField: "id"
     // }
 };

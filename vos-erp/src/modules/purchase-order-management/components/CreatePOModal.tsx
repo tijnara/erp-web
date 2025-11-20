@@ -80,7 +80,7 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                 setLoading(true);
                 setPoNumber("Loading..."); // Show loading state for PO number
                 try {
-                    // Fetch all dropdown data and the latest PO number concurrently
+                    // Use safe fallbacks for all requests
                     const [
                         termsRes,
                         typesRes,
@@ -89,42 +89,49 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                         transactionRes,
                         latestPORes
                     ] = await Promise.all([
-                        axios.get("/api/lookup/payment_terms"),
-                        axios.get("/api/lookup/price_types"),
-                        axios.get("/api/lookup/receiving_type"),
-                        axios.get("/api/lookup/suppliers"),
-                        axios.get("/api/lookup/transaction_type"),
-                        axios.get("/api/lookup/purchase_order?limit=1&sort=-purchase_order_no"),
+                        axios.get("/api/lookup/payment_terms").catch(() => ({ data: [] })),
+                        axios.get("/api/lookup/price_types").catch(() => ({ data: [] })),
+                        axios.get("/api/lookup/receiving_type").catch(() => ({ data: [] })),
+                        axios.get("/api/lookup/suppliers").catch(() => ({ data: [] })),
+                        axios.get("/api/lookup/transaction_type").catch(() => ({ data: [] })),
+                        axios.get("/api/lookup/purchase_order?limit=1&sort=-purchase_order_no").catch(() => ({ data: [] })),
                     ]);
 
-                    // Set dropdown data
-                    setPaymentTerms(termsRes.data.data || []);
-                    setPriceTypes(typesRes.data.data.map((pt: any) => ({ id: pt.price_type_id, name: pt.price_type_name })) || []);
-                    setReceivingTypes(receivingRes.data.data || []);
-                    // --- highlight-start ---
-                    // Store the full supplier data when you fetch it, not just the name and ID.
-                    setSuppliers(suppliersRes.data.data || []);
-                    // --- highlight-end ---
-                    setTransactionTypes(transactionRes.data.data.map((tt: any) => ({ id: tt.id, name: tt.transaction_type })) || []);
+                    // Helper to extract data array safely
+                    const getData = (res: any) => Array.isArray(res.data) ? res.data : (res.data?.data || []);
 
-                    // Calculate and set the next PO number from the fetched data
+                    setPaymentTerms(getData(termsRes));
+                    setPriceTypes(getData(typesRes).map((pt: any) => ({ id: pt.id ?? pt.price_type_id, name: pt.name ?? pt.price_type_name })));
+                    setReceivingTypes(getData(receivingRes));
+
+                    // Map suppliers carefully
+                    const rawSuppliers = getData(suppliersRes);
+                    setSuppliers(rawSuppliers.map((s: any) => ({
+                        id: s.id,
+                        supplier_name: s.supplier_name || s.name,
+                        supplier_type: s.supplier_type || "",
+                        payment_terms: s.payment_terms || ""
+                    })));
+
+                    setTransactionTypes(getData(transactionRes).map((tt: any) => ({ id: tt.id, name: tt.name ?? tt.transaction_type })));
+
+                    // Calculate next PO number
                     let newPONumber;
-                    const lastPO = latestPORes.data.data?.[0];
-                    if (lastPO) {
+                    const purchaseOrders = getData(latestPORes);
+                    const lastPO = purchaseOrders?.[0];
+
+                    if (lastPO && lastPO.purchase_order_no) {
                         const match = lastPO.purchase_order_no.match(/PO-(\d{4})-(\d+)/);
                         const currentYear = new Date().getFullYear();
                         if (match) {
                             const year = parseInt(match[1], 10);
                             const num = parseInt(match[2], 10);
-                            // If the year is the same, increment; otherwise, reset for the new year
                             const nextNum = year === currentYear ? num + 1 : 1;
                             newPONumber = `PO-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
                         } else {
-                            // Fallback for unexpected format
                             newPONumber = `PO-${currentYear}-0001`;
                         }
                     } else {
-                        // If no purchase orders exist yet
                         newPONumber = `PO-${new Date().getFullYear()}-0001`;
                     }
                     setPoNumber(newPONumber);
@@ -229,11 +236,10 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
 
             const response = await axios.post("/api/purchase_order", payload);
 
-            onPoCreated(response.data.data);
+            // Check response structure for created data
+            const createdPO = response.data.data || response.data;
+            onPoCreated(createdPO);
             onClose();
-
-            // Optional: Reload the page to see the new PO in the list
-            // window.location.reload();
 
         } catch (err: any) {
             console.error("Failed to create purchase order:", err.response?.data || err.message || err);
@@ -245,7 +251,7 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-3xl w-full">
+            <DialogContent className="max-w-3xl w-full" aria-describedby={undefined}>
                 <DialogTitle className="text-2xl font-bold text-gray-800">Create Purchase Order</DialogTitle>
                 <form className="p-6 space-y-6 text-xl" onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
