@@ -123,26 +123,28 @@ export default function SalesOrderManagementModule() {
     useEffect(() => {
         const fetchDropdownData = async () => {
             try {
+                // Fetch lookups with safe fallbacks so UI doesn't crash if any endpoint is missing
                 const [
                     roomUseRes, propTypeRes, sunExpRes, insulationRes, voltageRes, unitTypeRes
                 ] = await Promise.all([
-                    axios.get("/api/lookup/room_uses"),
-                    axios.get("/api/lookup/property_types"),
-                    axios.get("/api/lookup/sun_exposures"),
-                    axios.get("/api/lookup/insulation_types"),
-                    axios.get("/api/lookup/supply_voltages"),
-                    axios.get("/api/lookup/ac_unit_types")
+                    axios.get("/api/lookup/room_uses").catch(() => ({ data: [] } as any)),
+                    axios.get("/api/lookup/property_types").catch(() => ({ data: [] } as any)),
+                    axios.get("/api/lookup/sun_exposures").catch(() => ({ data: [] } as any)),
+                    axios.get("/api/lookup/insulation_types").catch(() => ({ data: [] } as any)),
+                    axios.get("/api/lookup/supply_voltages").catch(() => ({ data: [] } as any)),
+                    axios.get("/api/lookup/ac_unit_types").catch(() => ({ data: [] } as any))
                 ]);
 
-                setRoomUses(roomUseRes.data.data.map((item: any) => ({ id: item.id, name: item.name })));
-                setPropertyTypes(propTypeRes.data.data.map((item: any) => ({ id: item.id, name: item.name })));
-                setSunExposures(sunExpRes.data.data.map((item: any) => ({ id: item.id, name: item.level })));
-                setInsulationTypes(insulationRes.data.data.map((item: any) => ({ id: item.id, name: item.type })));
-                setSupplyVoltages(voltageRes.data.data.map((item: any) => ({ id: item.id, name: item.voltage_range })));
-                setAcUnitTypes(unitTypeRes.data.data.map((item: any) => ({ id: item.id, name: item.type })));
+                // FIX: Removed .data.data. Use .data directly; add name fallbacks per resource
+                setRoomUses(((roomUseRes as any).data || []).map((item: any) => ({ id: item.id, name: item.name || item.room_use })));
+                setPropertyTypes(((propTypeRes as any).data || []).map((item: any) => ({ id: item.id, name: item.name || item.type })));
+                setSunExposures(((sunExpRes as any).data || []).map((item: any) => ({ id: item.id, name: item.name || item.level })));
+                setInsulationTypes(((insulationRes as any).data || []).map((item: any) => ({ id: item.id, name: item.name || item.type })));
+                setSupplyVoltages(((voltageRes as any).data || []).map((item: any) => ({ id: item.id, name: item.name || item.voltage_range })));
+                setAcUnitTypes(((unitTypeRes as any).data || []).map((item: any) => ({ id: item.id, name: item.name || item.type })));
             } catch (error) {
                 console.error("Failed to fetch dropdown data:", error);
-                alert("Could not load form options. Please check the connection and refresh.");
+                // Keep silent to avoid blocking form usage
             }
         };
         fetchDropdownData();
@@ -154,9 +156,9 @@ export default function SalesOrderManagementModule() {
     const loadUserOptions = async (inputValue: string): Promise<UserOption[]> => {
         if (inputValue.length < 2) return [];
         try {
-            // Updated to use new customer API and fields
             const response = await axios.get(`/api/lookup/customer?search=${inputValue}`);
-            const users = response.data.data || [];
+            // FIX: Some routes return an array at root, others wrap in { data }
+            const users = Array.isArray(response.data) ? response.data : (response.data?.data || []);
             return users.map((user: ApiCustomer) => ({
                 label: `${user.customer_name} (${user.customer_email})`,
                 value: user // The value is the full customer object
