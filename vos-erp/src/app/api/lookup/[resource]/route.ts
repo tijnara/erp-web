@@ -63,13 +63,13 @@ const MAP: Record<
         fields: "price_type_id,price_type_name,code",
         nameField: "price_type_name",
         idField: "price_type_id"
-    },
-    transaction_types: {
-        path: "transaction_types",
-        fields: "id,transaction_type",
-        nameField: "transaction_type",
-        idField: "id"
     }
+    // transaction_types: {  // Table doesn't exist in Supabase
+    //     path: "transaction_types",
+    //     fields: "id,transaction_type",
+    //     nameField: "transaction_type",
+    //     idField: "id"
+    // }
 };
 
 export async function GET(req: NextRequest, context: { params: Promise<{ resource: string }> }) {

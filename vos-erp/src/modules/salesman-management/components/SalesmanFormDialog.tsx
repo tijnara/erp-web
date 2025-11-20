@@ -3,19 +3,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Salesman, UpsertSalesmanDTO } from "../types";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 export type Option = { value: string | number; label: string };
 
 type Branch = { id: number; branch_name: string; branch_code?: string };
 type Operation = { id: number; operation_name: string };
-type Company = { id: number; company_name: string; company_code?: string };
-type Supplier = { id: number; supplier_name: string; supplier_code?: string };
+type Company = { company_id: number; company_name: string; company_code?: string };
+type Supplier = { id: number; supplier_name: string; supplier_shortcut?: string };
 type Division = { id: number; division_name: string };
-type PriceType = { id: number; price_type_name: string };
+type PriceType = { price_type_id: number; price_type_name: string };
 type UserRow = { user_id: number; user_fname?: string; user_lname?: string };
 
-type SalesmanRow = { salesman_code?: string; code?: string };
+type SalesmanRow = { salesman_code?: string };
 
 async function safeQuery<T>(builder: any): Promise<T | []> {
   try {
@@ -36,24 +36,24 @@ async function fetchBranches(): Promise<Option[]> {
   return toOptions(rows as Branch[], (r) => ({ value: r.branch_code || r.id, label: r.branch_name }));
 }
 async function fetchOperations(): Promise<Option[]> {
-  const rows = await safeQuery<Operation[]>(supabase.from("operation").select("id, operation_name"));
+  const rows = await safeQuery<Operation[]>(supabase.from("operations").select("id, operation_name"));
   return toOptions(rows as Operation[], (r) => ({ value: r.id, label: r.operation_name }));
 }
 async function fetchCompanies(): Promise<Option[]> {
-  const rows = await safeQuery<Company[]>(supabase.from("company").select("id, company_name, company_code"));
-  return toOptions(rows as Company[], (r) => ({ value: r.company_code || r.id, label: r.company_name }));
+  const rows = await safeQuery<Company[]>(supabase.from("company").select("company_id, company_name, company_code"));
+  return toOptions(rows as Company[], (r) => ({ value: r.company_code || r.company_id, label: r.company_name }));
 }
 async function fetchSuppliers(): Promise<Option[]> {
-  const rows = await safeQuery<Supplier[]>(supabase.from("suppliers").select("id, supplier_name, supplier_code"));
-  return toOptions(rows as Supplier[], (r) => ({ value: r.supplier_code || r.id, label: r.supplier_name }));
+  const rows = await safeQuery<Supplier[]>(supabase.from("suppliers").select("id, supplier_name, supplier_shortcut"));
+  return toOptions(rows as Supplier[], (r) => ({ value: r.supplier_shortcut || r.id, label: r.supplier_name }));
 }
 async function fetchDivisions(): Promise<Option[]> {
-  const rows = await safeQuery<Division[]>(supabase.from("division").select("id, division_name"));
-  return toOptions(rows as Division[], (r) => ({ value: r.id, label: r.division_name }));
+  // Table does not exist in database
+  return [];
 }
 async function fetchPriceTypes(): Promise<Option[]> {
-  const rows = await safeQuery<PriceType[]>(supabase.from("price_types").select("id, price_type_name"));
-  return toOptions(rows as PriceType[], (r) => ({ value: r.id, label: r.price_type_name }));
+  const rows = await safeQuery<PriceType[]>(supabase.from("price_types").select("price_type_id, price_type_name"));
+  return toOptions(rows as PriceType[], (r) => ({ value: r.price_type_id, label: r.price_type_name }));
 }
 
 async function fetchUsers(op?: string | number): Promise<{ options: Option[]; byId: Record<string, UserRow> }> {
@@ -72,10 +72,10 @@ async function fetchUsers(op?: string | number): Promise<{ options: Option[]; by
 }
 
 async function generateNextSalesmanCode(): Promise<string> {
-  const rows = await safeQuery<SalesmanRow[]>(supabase.from("salesman").select("salesman_code, code"));
+  const rows = await safeQuery<SalesmanRow[]>(supabase.from("salesman").select("salesman_code"));
   let max = 0;
   for (const r of rows as SalesmanRow[]) {
-    const c = r.salesman_code || r.code || "";
+    const c = r.salesman_code || "";
     const m = c.match(/SM-(\d+)/i);
     if (m) {
       const num = parseInt(m[1], 10);
@@ -220,6 +220,11 @@ export function SalesmanFormDialog({
     return !(selectedUserId === "" || !code || employee_id === "" || isNaN(Number(employee_id)));
   }, [selectedUserId, code, employee_id]);
 
+  function handleClose() {
+    if (submitting) return; // Prevent closing while submitting
+    onCloseAction();
+  }
+
   async function handleSubmit() {
     if (!canSubmit) return;
     try {
@@ -251,7 +256,13 @@ export function SalesmanFormDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCloseAction} />
+      <div
+        className="absolute inset-0 bg-black/30"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleClose();
+        }}
+      />
       <div className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl border border-gray-200 p-5">
         <h3 className="text-lg font-semibold mb-4">
           {mode === "create" ? "Register New Salesman" : "Edit Salesman"}
@@ -443,7 +454,7 @@ export function SalesmanFormDialog({
         <div className="mt-6 flex items-center justify-end gap-2">
           <button
             className="px-3 py-2 rounded-lg border text-sm"
-            onClick={onCloseAction}
+            onClick={handleClose}
             disabled={submitting}
             type="button"
           >

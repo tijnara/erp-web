@@ -67,7 +67,7 @@ export function SupplierFormDialog({
   const [barangays, setBarangays] = useState<Barangay[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [deliveryTermsOptions, setDeliveryTermsOptions] = useState<DeliveryTerm[]>([]);
-  const [supplierTypes, setSupplierTypes] = useState<SupplierType[]>([]);
+  // Note: supplierTypes removed - table doesn't exist
   const [loadingGeo, setLoadingGeo] = useState<boolean>(false);
 
   // Derived filtered lists
@@ -140,7 +140,7 @@ export function SupplierFormDialog({
 
         // 2. Fetch dynamic data from Supabase
         const { data: deliveryTermsData } = await supabase.from("delivery_terms").select("id, delivery_name");
-        const { data: transactionTypeData } = await supabase.from("transaction_types").select("id, transaction_type");
+        // Note: transaction_types table does not exist - removed to prevent 404 errors
 
         // 3. Process Local Data
         const provArr: Province[] = (provincesMod as any).default ?? provincesMod;
@@ -163,9 +163,7 @@ export function SupplierFormDialog({
           }
         }
 
-        if (transactionTypeData) {
-          setSupplierTypes(transactionTypeData);
-        }
+        // Note: Supplier types/transaction types removed - table doesn't exist
 
         // 5. Derive codes from existing text (if editing)
         const pCode = findProvinceCodeByName(initial?.state_province ?? "");
@@ -353,14 +351,16 @@ export function SupplierFormDialog({
           </div>
           <div>
             <InputLabel>Supplier Type</InputLabel>
-            <select value={supplier_type ?? ""} onChange={(e) => setSupplierType(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white">
-              <option value="">-- Select Type --</option>
-              {supplierTypes.map((t) => (
-                <option key={t.id} value={t.transaction_type}>
-                  {t.transaction_type}
-                </option>
-              ))}
+            <select
+              value={supplier_type ?? ""}
+              onChange={(e) => setSupplierType(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-gray-50"
+              disabled
+              title="Supplier types table not configured in database"
+            >
+              <option value="">-- Not Available --</option>
             </select>
+            <div className="text-xs text-gray-400 mt-1">Table not configured</div>
           </div>
           <div className="col-span-2">
             <InputLabel>TIN #</InputLabel>

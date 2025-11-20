@@ -223,8 +223,8 @@ export function SalesmenView({ provider }: { provider: DataProvider }) {
                 open={open}
                 mode={mode}
                 initial={current ?? undefined}
-                onClose={() => setOpen(false)}
-                onSubmit={async (dto) => {
+                onCloseAction={() => setOpen(false)}
+                onSubmitAction={async (dto) => {
                     try {
                         if (mode === "create") await provider.createSalesman(dto);
                         else if (current) await provider.updateSalesman(current.id, dto);
