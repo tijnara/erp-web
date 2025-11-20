@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "../../../lib/supabase";
 
 export function SegmentDropdown({
   value,
@@ -18,18 +19,15 @@ export function SegmentDropdown({
   useEffect(() => {
     async function fetchSegments() {
       try {
-        const response = await fetch("http://100.119.3.44:8090/items/segment");
-        if (!response.ok) {
-          throw new Error("Failed to fetch segments");
-        }
-        const result = await response.json();
-        const formattedSegments = result.data.map((segment: any) => ({
+        const { data, error } = await supabase.from("segment").select("segment_id, segment_name");
+        if (error) throw error;
+        const formattedSegments = (data || []).map((segment: any) => ({
           id: segment.segment_id,
           name: segment.segment_name,
         }));
         setSegments(formattedSegments);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message || 'Failed to load segments');
       } finally {
         setLoading(false);
       }
@@ -70,4 +68,3 @@ export function SegmentDropdown({
     </div>
   );
 }
-

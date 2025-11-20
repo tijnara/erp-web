@@ -3,24 +3,18 @@
 import { useEffect, useState } from "react";
 import { BranchFormDialog } from "./BranchFormDialog";
 
-export function BranchesView({ provider }: { provider: { fetchBranches: (page: number) => Promise<any>; registerBranch: (branch: any) => Promise<void> } }) {
+type ProviderType = {
+    list: (params?: { q?: string; limit?: number; offset?: number }) => Promise<{ items: any[]; total: number }>;
+    create: (dto: any) => Promise<any>;
+    update: (id: string | number, dto: any) => Promise<any>;
+    delete: (id: string | number) => Promise<void>;
+};
+
+export function BranchesView({ provider }: { provider: ProviderType }) {
     const [branches, setBranches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
-    const [newBranch, setNewBranch] = useState({
-        branch_description: "",
-        branch_name: "",
-        branch_head: "",
-        branch_code: "",
-        state_province: "",
-        city: "",
-        brgy: "",
-        phone_number: "",
-        postal_code: "",
-        isMoving: 0,
-        isReturn: 0,
-        isActive: 1,
-    });
+    const [searchQuery, setSearchQuery] = useState("");
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<"create" | "edit">("create");
     const [current, setCurrent] = useState<any | null>(null);
@@ -29,8 +23,10 @@ export function BranchesView({ provider }: { provider: { fetchBranches: (page: n
         async function loadBranches() {
             setLoading(true);
             try {
-                const data = await provider.fetchBranches(page);
-                setBranches(data.data);
+                const limit = 20;
+                const offset = (page - 1) * limit;
+                const result = await provider.list({ q: searchQuery, limit, offset });
+                setBranches(result.items);
             } catch (error) {
                 console.error("Error fetching branches:", error);
             } finally {
@@ -39,29 +35,26 @@ export function BranchesView({ provider }: { provider: { fetchBranches: (page: n
         }
 
         loadBranches();
-    }, [provider, page]);
+    }, [provider, page, searchQuery]);
 
     const handleRegisterBranch = async (branch: any) => {
         try {
-            await provider.registerBranch(branch);
-            alert("Branch registered successfully!");
+            if (mode === "edit" && current) {
+                await provider.update(current.id, branch);
+                alert("Branch updated successfully!");
+            } else {
+                await provider.create(branch);
+                alert("Branch registered successfully!");
+            }
             setOpen(false);
             setCurrent(null);
             setMode("create");
-            setNewBranch({
-                branch_description: "",
-                branch_name: "",
-                branch_head: "",
-                branch_code: "",
-                state_province: "",
-                city: "",
-                brgy: "",
-                phone_number: "",
-                postal_code: "",
-                isMoving: 0,
-                isReturn: 0,
-                isActive: 1,
-            });
+
+            // Reload branches
+            const limit = 20;
+            const offset = (page - 1) * limit;
+            const result = await provider.list({ q: searchQuery, limit, offset });
+            setBranches(result.items);
         } catch (error) {
             console.error("Error registering branch:", error);
             alert("Failed to register branch.");
@@ -91,8 +84,8 @@ export function BranchesView({ provider }: { provider: { fetchBranches: (page: n
             <input
                 placeholder="Search by name, code, city, phone, or province…"
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                value={newBranch.branch_name}
-                onChange={(e) => setNewBranch({ ...newBranch, branch_name: e.target.value })}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
             />
             <div className="overflow-hidden border border-gray-200 rounded-xl">
                 <table className="w-full text-sm">

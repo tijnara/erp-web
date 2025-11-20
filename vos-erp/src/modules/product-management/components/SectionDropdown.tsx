@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "../../../lib/supabase";
 
 export function SectionDropdown({
   value,
@@ -18,18 +19,15 @@ export function SectionDropdown({
   useEffect(() => {
     async function fetchSections() {
       try {
-        const response = await fetch("http://100.119.3.44:8090/items/sections");
-        if (!response.ok) {
-          throw new Error("Failed to fetch sections");
-        }
-        const result = await response.json();
-        const formattedSections = result.data.map((section: any) => ({
+        const { data, error } = await supabase.from("sections").select("section_id, section_name");
+        if (error) throw error;
+        const formattedSections = (data || []).map((section: any) => ({
           id: section.section_id,
           name: section.section_name,
         }));
         setSections(formattedSections);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message || 'Failed to load sections');
       } finally {
         setLoading(false);
       }
@@ -70,4 +68,3 @@ export function SectionDropdown({
     </div>
   );
 }
-

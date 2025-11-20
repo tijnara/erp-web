@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { itemsUrl } from "@/config/api";
 
 // --- Type Definitions ---
 interface DropdownOption {
@@ -90,12 +89,12 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                         transactionRes,
                         latestPORes
                     ] = await Promise.all([
-                        axios.get(itemsUrl("payment_terms")),
-                        axios.get(itemsUrl("price_types")),
-                        axios.get(itemsUrl("receiving_type")),
-                        axios.get(itemsUrl("suppliers")),
-                        axios.get(itemsUrl("transaction_type")),
-                        axios.get(itemsUrl("purchase_order?limit=1&sort=-purchase_order_no")),
+                        axios.get("/api/lookup/payment_terms"),
+                        axios.get("/api/lookup/price_types"),
+                        axios.get("/api/lookup/receiving_type"),
+                        axios.get("/api/lookup/suppliers"),
+                        axios.get("/api/lookup/transaction_type"),
+                        axios.get("/api/lookup/purchase_order?limit=1&sort=-purchase_order_no"),
                     ]);
 
                     // Set dropdown data
@@ -228,7 +227,7 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                 payment_status: 1,
             };
 
-            const response = await axios.post(itemsUrl("purchase_order"), payload);
+            const response = await axios.post("/api/purchase_order", payload);
 
             onPoCreated(response.data.data);
             onClose();

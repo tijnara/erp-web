@@ -7,6 +7,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "../../../lib/supabase";
+
+// Feature flag: only attempt to load customer classification lookup if explicitly enabled.
+const ENABLE_CUSTOMER_CLASSIFICATION = process.env.NEXT_PUBLIC_ENABLE_CUSTOMER_CLASSIFICATION === 'true';
 
 type Province = { province_code: string; province_name: string; region_code?: string; psgc_code?: string };
 type City = { city_code: string; city_name: string; province_code: string; region_desc?: string; psgc_code?: string };
@@ -97,9 +101,15 @@ export function CustomerFormDialog({
         return `CC-${String(newCodeNumber).padStart(4, "0")}`;
     };
 
+    function safeQuery(builder: any) {
+        return builder.then((r: any) => {
+            if (r.error) return [];
+            return r.data || [];
+        }).catch(() => []);
+    }
+
     useEffect(() => {
         if (!open) return;
-
         // Reset form state from initial props
         setName(initial?.customer_name ?? "");
         setStoreName(initial?.store_name ?? "");
@@ -118,43 +128,51 @@ export function CustomerFormDialog({
         setStreetAddress(initial?.street_address ?? "");
         setRemarks(initial?.otherDetails ?? "");
 
-        const fetchEncoderDetails = async (id?: number) => {
-            const url = id ? `http://100.119.3.44:8090/items/user/${id}` : "http://100.119.3.44:8090/items/user";
-            try {
-                const res = await fetch(url, { cache: "no-store" });
-                if (!res.ok) throw new Error(`Failed to fetch encoder: ${res.status}`);
-                const json = await res.json();
-                const user = id ? json?.data : json?.data?.[0];
-                if (user) {
-                    setEncoderId(user.user_id);
-                    const fullName = [user.user_fname, user.user_lname].filter(Boolean).join(" ");
-                    setEncoderName(fullName || `User ${user.user_id}`);
-                }
-            } catch (error) {
-                console.error("Error fetching encoder details:", error);
+        async function hydrateEncoder() {
+          try {
+            const { data } = await supabase.auth.getUser();
+            const u = data.user;
+            if (u) {
+              setEncoderId(Number(u.id));
+              const fullName = (u.user_metadata?.full_name || [u.user_metadata?.first_name, u.user_metadata?.last_name].filter(Boolean).join(" ")).trim();
+              setEncoderName(fullName || u.email || u.id);
             }
-        };
-
-        if (mode === "create") {
-            fetchEncoderDetails();
-            setCode("Generating...");
-            // ✅ FIX: Fetch ALL customers to find the true max code for display.
-            fetch("/api/customer", { cache: "no-store" })
-                .then((res) => res.json())
-                .then((body) => {
-                    const newCode = getNextCustomerCode(body.data);
-                    setCode(newCode);
-                });
-        } else {
-            setCode(initial?.customer_code ?? "");
-            fetchEncoderDetails(initial?.encoder_id);
+          } catch {}
         }
 
-        // Fetch dropdowns
-        fetch("/api/store_type").then(r => r.json()).then(j => setStoreTypes(j.data || []));
-        fetch("/api/discount_type").then(r => r.json()).then(j => setDiscountTypes(j.data || []));
-        fetch("http://100.119.3.44:8090/items/customer_classification")
-            .then(r => r.json()).then(j => setCustomerClassifications(j.data || []));
+        async function loadLookups() {
+          const lookups: Promise<any[]>[] = [
+            safeQuery(supabase.from("store_type").select("id, store_type")),
+            safeQuery(supabase.from("discount_type").select("id, discount_type")),
+          ];
+
+          // Only push classification lookup if feature flag enabled to avoid 404 on missing table.
+          if (ENABLE_CUSTOMER_CLASSIFICATION) {
+            lookups.push(safeQuery(supabase.from("customer_classification").select("id, classification_name")));
+          }
+
+          const results = await Promise.all(lookups);
+          const [storeTypesData, discountTypesData, classificationData = []] = results;
+          setStoreTypes(storeTypesData);
+          setDiscountTypes(discountTypesData);
+          // Only set classifications if feature enabled
+          if (ENABLE_CUSTOMER_CLASSIFICATION) {
+            setCustomerClassifications(classificationData);
+          } else {
+            setCustomerClassifications([]);
+          }
+        }
+
+        async function generateCodeIfCreate() {
+          if (mode !== 'create') return;
+          setCode("Generating...");
+          const customers = await safeQuery(supabase.from("customer").select("id, customer_code, store_name"));
+          const newCode = getNextCustomerCode(customers as any);
+          setCode(newCode);
+        }
+
+        hydrateEncoder();
+        loadLookups();
 
         // Lazy load geo data
         (async () => {
@@ -174,6 +192,8 @@ export function CustomerFormDialog({
                 setLoadingGeo(false);
             }
         })();
+
+        generateCodeIfCreate();
     }, [open, initial, mode]);
 
     useEffect(() => {
@@ -189,41 +209,25 @@ export function CustomerFormDialog({
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-
-        // Only check for duplicate store name in create mode
         if (mode === 'create') {
             try {
-                // Fetch all customers to check for duplicate store name
-                const res = await fetch("/api/customer", { cache: "no-store" });
-                if (!res.ok) throw new Error(`Failed to fetch customers for code generation: ${res.statusText}`);
-                const body = await res.json();
-                // Check for duplicate store name (case-insensitive, trimmed)
-                const duplicate = (body.data || []).some((c: Customer) =>
-                    c.store_name && store_name && c.store_name.trim().toLowerCase() === store_name.trim().toLowerCase()
-                );
+                const customers = await safeQuery(supabase.from("customer").select("id, customer_code, store_name"));
+                const duplicate = (customers as any[]).some((c) => c.store_name && store_name && c.store_name.trim().toLowerCase() === store_name.trim().toLowerCase());
                 if (duplicate) {
                     setStoreNameError("Store name already exists. Please enter a unique store name.");
                     return;
                 } else {
                     setStoreNameError("");
                 }
-                const newCode = getNextCustomerCode(body.data);
+                const newCode = getNextCustomerCode(customers as any);
                 const finalPayload: UpsertCustomerDTO = {
                     customer_code: newCode,
                     customer_name, store_name, store_signage, province, city, brgy,
                     contact_number, customer_email, store_type, discount_type, customer_classification,
-                    isActive, isVAT, isEWT, encoder_id,
-                    street_address,
+                    isActive, isVAT, isEWT, encoder_id, street_address,
                 };
-                console.log("Payload being sent to API:", finalPayload);
-                if (typeof onSubmitAction === "function") {
-                    await onSubmitAction(finalPayload);
-                } else {
-                    console.error("onSubmitAction prop is not a function.");
-                }
-                if (typeof onCloseAction === "function") {
-                    onCloseAction();
-                }
+                if (typeof onSubmitAction === "function") await onSubmitAction(finalPayload);
+                if (typeof onCloseAction === "function") onCloseAction();
             } catch (error) {
                 console.error("Could not generate new customer code on submit:", error);
                 return;
@@ -247,16 +251,10 @@ export function CustomerFormDialog({
                 isEWT,
                 encoder_id,
                 street_address,
-                otherDetails: remarks, // Include remarks in the payload
+                otherDetails: remarks,
             };
-            if (typeof onSubmitAction === "function") {
-                await onSubmitAction(finalPayload);
-            } else {
-                console.error("onSubmitAction prop is not a function.");
-            }
-            if (typeof onCloseAction === "function") {
-                onCloseAction();
-            }
+            if (typeof onSubmitAction === "function") await onSubmitAction(finalPayload);
+            if (typeof onCloseAction === "function") onCloseAction();
         }
     };
 
@@ -366,6 +364,7 @@ export function CustomerFormDialog({
                                         {discountTypes.map((dt) => <option key={dt.id} value={dt.id}>{dt.discount_type}</option>)}
                                     </select>
                                 </div>
+                                {ENABLE_CUSTOMER_CLASSIFICATION && (
                                 <div className="form-group">
                                     <label htmlFor="customer_classification" className="block text-sm font-medium text-gray-700">Classification</label>
                                     <select id="customer_classification" value={customer_classification ?? ""} onChange={(e) => setCustomerClassification(e.target.value ? Number(e.target.value) : null)} className="w-full px-3 py-2 border border-gray-300 rounded-md" >
@@ -373,38 +372,11 @@ export function CustomerFormDialog({
                                         {customerClassifications.map((cc) => <option key={cc.id} value={cc.id}>{cc.classification_name}</option>)}
                                     </select>
                                 </div>
-                                <div className="form-group col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                                    <div className="flex items-center gap-4 mt-1">
-                                        <label className="flex items-center">
-                                            <input type="radio" name="isActive" value={1} checked={isActive === 1} onChange={() => setIsActive(1)} className="form-radio" />
-                                            <span className="ml-2">Active</span>
-                                        </label>
-                                        <label className="flex items-center">
-                                            <input type="radio" name="isActive" value={0} checked={isActive === 0} onChange={() => setIsActive(0)} className="form-radio" />
-                                            <span className="ml-2">Inactive</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div className="form-group col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700">Tax Settings</label>
-                                    <div className="flex items-center gap-4 mt-1">
-                                        <label className="flex items-center">
-                                            <input type="checkbox" checked={isVAT === 1} onChange={(e) => setIsVAT(e.target.checked ? 1 : 0)} className="form-checkbox" />
-                                            <span className="ml-2">VAT</span>
-                                        </label>
-                                        <label className="flex items-center">
-                                            <input type="checkbox" checked={isEWT === 1} onChange={(e) => setIsEWT(e.target.checked ? 1 : 0)} className="form-checkbox" />
-                                            <span className="ml-2">EWT</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                {encoderName && (
-                                    <div className="form-group">
-                                        <label htmlFor="encoder">Encoder</label>
-                                        <Input id="encoder" value={encoderName} readOnly />
-                                    </div>
                                 )}
+                                <div className="form-group">
+                                    <label htmlFor="encoder">Encoder</label>
+                                    <Input id="encoder" value={encoderName} readOnly />
+                                </div>
                                 <div className="form-group col-span-2">
                                     <label htmlFor="remarks">Remarks / Notes</label>
                                     <textarea

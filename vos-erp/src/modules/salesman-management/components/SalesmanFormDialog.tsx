@@ -3,140 +3,86 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Salesman, UpsertSalesmanDTO } from "../types";
+import { supabase } from "../../../lib/supabase";
 
 export type Option = { value: string | number; label: string };
 
-async function fetchOptionsSafe(endpoint: string): Promise<Option[]> {
+type Branch = { id: number; branch_name: string; branch_code?: string };
+type Operation = { id: number; operation_name: string };
+type Company = { id: number; company_name: string; company_code?: string };
+type Supplier = { id: number; supplier_name: string; supplier_code?: string };
+type Division = { id: number; division_name: string };
+type PriceType = { id: number; price_type_name: string };
+type UserRow = { user_id: number; user_fname?: string; user_lname?: string };
+
+type SalesmanRow = { salesman_code?: string; code?: string };
+
+async function safeQuery<T>(builder: any): Promise<T | []> {
   try {
-    const res = await fetch(`/api/lookup/${endpoint}`);
-    if (!res.ok) return [];
-    const options: any[] = await res.json();
-    return options.map((option) => ({
-      value: option.id,
-      label: option.name
-    }));
+    const { data, error } = await builder;
+    if (error || !data) return [] as any;
+    return data as T;
   } catch {
-    return [];
+    return [] as any;
   }
 }
 
-// Branch options: ensure option.value is the branch ID
-async function fetchBranchOptions(): Promise<Option[]> {
-  try {
-    const res = await fetch("/api/lookup/branches");
-    if (!res.ok) return [];
-    const options: any[] = await res.json();
-    return options.map((option) => ({
-      value: option.id,
-      label: option.name
-    }));
-  } catch {
-    return [];
+function toOptions<T>(rows: T[], map: (row: T) => Option): Option[] {
+  return rows.map(map);
+}
+
+async function fetchBranches(): Promise<Option[]> {
+  const rows = await safeQuery<Branch[]>(supabase.from("branches").select("id, branch_name, branch_code"));
+  return toOptions(rows as Branch[], (r) => ({ value: r.branch_code || r.id, label: r.branch_name }));
+}
+async function fetchOperations(): Promise<Option[]> {
+  const rows = await safeQuery<Operation[]>(supabase.from("operation").select("id, operation_name"));
+  return toOptions(rows as Operation[], (r) => ({ value: r.id, label: r.operation_name }));
+}
+async function fetchCompanies(): Promise<Option[]> {
+  const rows = await safeQuery<Company[]>(supabase.from("company").select("id, company_name, company_code"));
+  return toOptions(rows as Company[], (r) => ({ value: r.company_code || r.id, label: r.company_name }));
+}
+async function fetchSuppliers(): Promise<Option[]> {
+  const rows = await safeQuery<Supplier[]>(supabase.from("suppliers").select("id, supplier_name, supplier_code"));
+  return toOptions(rows as Supplier[], (r) => ({ value: r.supplier_code || r.id, label: r.supplier_name }));
+}
+async function fetchDivisions(): Promise<Option[]> {
+  const rows = await safeQuery<Division[]>(supabase.from("division").select("id, division_name"));
+  return toOptions(rows as Division[], (r) => ({ value: r.id, label: r.division_name }));
+}
+async function fetchPriceTypes(): Promise<Option[]> {
+  const rows = await safeQuery<PriceType[]>(supabase.from("price_types").select("id, price_type_name"));
+  return toOptions(rows as PriceType[], (r) => ({ value: r.id, label: r.price_type_name }));
+}
+
+async function fetchUsers(op?: string | number): Promise<{ options: Option[]; byId: Record<string, UserRow> }> {
+  let query = supabase.from("user").select("user_id, user_fname, user_lname");
+  if (op) {
+    query = query.eq("operation", op);
   }
-}
-
-// Company options: ensure option.value is the company ID
-async function fetchCompanyOptions(): Promise<Option[]> {
-  try {
-    const res = await fetch("/api/lookup/company");
-    if (!res.ok) return [];
-    const options: any[] = await res.json();
-    return options.map((option) => ({
-      value: option.id,
-      label: option.name
-    }));
-  } catch {
-    return [];
-  }
-}
-
-// Division options: ensure option.value is the division ID
-async function fetchDivisionOptions(): Promise<Option[]> {
-  try {
-    const res = await fetch("/api/lookup/division");
-    if (!res.ok) return [];
-    const options: any[] = await res.json();
-    return options.map((option) => ({
-      value: option.id,
-      label: option.name
-    }));
-  } catch {
-    return [];
-  }
-}
-
-// Supplier options: ensure option.value is the supplier ID
-async function fetchSupplierOptions(): Promise<Option[]> {
-  try {
-    const res = await fetch("/api/lookup/suppliers");
-    if (!res.ok) return [];
-    const options: any[] = await res.json();
-    return options.map((option) => ({
-      value: option.id,
-      label: option.name
-    }));
-  } catch {
-    return [];
-  }
-}
-
-// Specialized fetch for Users, building Option list and an ID->row map
-// Attempts to filter by operation if provided (server may ignore this parameter)
-export type UserRow = { user_id: number; user_fname?: string; user_lname?: string };
-
-async function fetchUsersOptions(op?: string | number): Promise<{ options: Option[]; byId: Record<string, UserRow> }> {
-  try {
-    const url = new URL("/api/lookup/user", window.location.origin);
-    if (op != null && op !== "") {
-      url.searchParams.set("operation", String(op));
-    }
-    const res = await fetch(url.toString());
-    if (!res.ok) return { options: [], byId: {} };
-    const json = await res.json();
-    const rows: UserRow[] = json?.data ?? [];
-    const byId: Record<string, UserRow> = {};
-    const options: Option[] = rows.map((u) => {
-      const label = [u.user_fname ?? "", u.user_lname ?? ""].filter(Boolean).join(" ").trim() || String(u.user_id);
-      byId[String(u.user_id)] = u;
-      return { value: u.user_id, label } as Option;
-    });
-    return { options, byId };
-  } catch {
-    return { options: [], byId: {} };
-  }
-}
-
-function truncateNameDisplay(full: string, max = 24): string {
-  if (!full) return "";
-  if (full.length <= max) return full;
-  return full.slice(0, max - 1) + "…";
-}
-
-// Helpers to auto-generate next Salesman Code (SM-XXXX), always incrementing
-function parseSalesmanCodeNumber(code: any): number {
-  if (typeof code !== "string") return 0;
-  const m = code.match(/SM-(\d+)/i);
-  if (!m) return 0;
-  const n = parseInt(m[1], 10);
-  return Number.isFinite(n) ? n : 0;
+  const rows = await safeQuery<UserRow[]>(query);
+  const byId: Record<string, UserRow> = {};
+  const options = (rows as UserRow[]).map((u) => {
+    const label = [u.user_fname ?? "", u.user_lname ?? ""].filter(Boolean).join(" ").trim() || String(u.user_id);
+    byId[String(u.user_id)] = u;
+    return { value: u.user_id, label };
+  });
+  return { options, byId };
 }
 
 async function generateNextSalesmanCode(): Promise<string> {
-  try {
-    const res = await fetch("/api/lookup/salesman");
-    if (!res.ok) return "SM-0001";
-    const json = await res.json();
-    const rows: any[] = json?.data ?? [];
-    let max = 0;
-    for (const r of rows) {
-      const c = r.salesman_code ?? r.code ?? null;
-      const num = parseSalesmanCodeNumber(c);
-      if (num > max) max = num;
+  const rows = await safeQuery<SalesmanRow[]>(supabase.from("salesman").select("salesman_code, code"));
+  let max = 0;
+  for (const r of rows as SalesmanRow[]) {
+    const c = r.salesman_code || r.code || "";
+    const m = c.match(/SM-(\d+)/i);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (Number.isFinite(num) && num > max) max = num;
     }
-    return `SM-${String(max + 1).padStart(4, "0")}`;
-  } catch {
-    return "SM-0001";
   }
+  return `SM-${String(max + 1).padStart(4, "0")}`;
 }
 
 function InputLabel({ children, required }: { children: any; required?: boolean }) {
@@ -147,7 +93,6 @@ function InputLabel({ children, required }: { children: any; required?: boolean 
     </div>
   );
 }
-
 function Help({ children }: { children: any }) {
   return <div className="text-xs text-gray-400 mt-1">{children}</div>;
 }
@@ -156,14 +101,14 @@ export function SalesmanFormDialog({
   open,
   mode,
   initial,
-  onClose,
-  onSubmit,
+  onCloseAction,
+  onSubmitAction,
 }: {
   open: boolean;
   mode: "create" | "edit";
   initial?: Partial<Salesman>;
-  onClose: () => void;
-  onSubmit: (dto: UpsertSalesmanDTO) => Promise<void>;
+  onCloseAction: () => void;
+  onSubmitAction: (dto: UpsertSalesmanDTO) => Promise<void>;
 }) {
   const [employee_id, setEmployeeId] = useState<number | "">(initial?.employee_id ?? "");
   const [code, setCode] = useState(initial?.code ?? "");
@@ -177,23 +122,19 @@ export function SalesmanFormDialog({
   const [price_type, setPriceType] = useState<string | number | "">(initial?.price_type ?? "");
   const [isActive, setIsActive] = useState<boolean>(initial?.isActive ?? true);
 
-  // Encoder (current logged-in user)
   const [encoderId, setEncoderId] = useState<number | null>(null);
-  const [encoderName, setEncoderName] = useState<string>("");
 
   const [branches, setBranches] = useState<Option[]>([]);
-  const [operations, setOperations] = useState<Option[]>([]);
+  const [operationsOpts, setOperationsOpts] = useState<Option[]>([]);
   const [companies, setCompanies] = useState<Option[]>([]);
   const [suppliers, setSuppliers] = useState<Option[]>([]);
   const [divisions, setDivisions] = useState<Option[]>([]);
   const [priceTypes, setPriceTypes] = useState<Option[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Users source for Salesman Name field
   const [users, setUsers] = useState<Option[]>([]);
   const [usersById, setUsersById] = useState<Record<string, any>>({});
   const [selectedUserId, setSelectedUserId] = useState<string | number | "">(initial?.employee_id ?? "");
-  // Typeahead state for Salesman Name
   const [userQuery, setUserQuery] = useState("");
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState<number>(-1);
@@ -217,14 +158,13 @@ export function SalesmanFormDialog({
 
   useEffect(() => {
     if (!open) return;
-    // try to fetch lookups; ignore errors
-    fetchBranchOptions().then(setBranches);
-    fetchOptionsSafe("operation").then(setOperations);
-    fetchCompanyOptions().then(setCompanies);
-    fetchSupplierOptions().then(setSuppliers);
-    fetchDivisionOptions().then(setDivisions);
-    fetchOptionsSafe("price_types").then(setPriceTypes);
-    fetchUsersOptions(operation).then(({ options, byId }) => {
+    fetchBranches().then(setBranches);
+    fetchOperations().then(setOperationsOpts);
+    fetchCompanies().then(setCompanies);
+    fetchSuppliers().then(setSuppliers);
+    fetchDivisions().then(setDivisions);
+    fetchPriceTypes().then(setPriceTypes);
+    fetchUsers(operation).then(({ options, byId }) => {
       setUsers(options);
       setUsersById(byId);
     });
@@ -251,7 +191,7 @@ export function SalesmanFormDialog({
     if (!open) return;
     if (selectedUserId !== "") {
       const sel = users.find((o) => String(o.value) === String(selectedUserId));
-      setUserQuery(truncateNameDisplay(sel?.label ?? ""));
+      setUserQuery(sel?.label ?? "");
     } else {
       setUserQuery("");
     }
@@ -261,53 +201,24 @@ export function SalesmanFormDialog({
   // Auto-generate Salesman Code when creating a new record
   useEffect(() => {
     if (!open || mode !== "create") return;
-    generateNextSalesmanCode()
-      .then((next) => setCode(next))
-      .catch(() => setCode("SM-0001"));
+    generateNextSalesmanCode().then(setCode).catch(() => setCode("SM-0001"));
   }, [open, mode]);
 
   // Fetch current logged-in user (encoder)
   useEffect(() => {
     if (!open) return;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (!res.ok) return;
-        const json = await res.json();
-        const u = json?.user;
-        if (u?.sub) {
-          setEncoderId(Number(u.sub));
-          setEncoderName(u.name || `User ${u.sub}`);
-        }
-      } catch {
-        // ignore
+    // Current user from auth session
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data.user;
+      if (u) {
+        setEncoderId(Number(u.id)); // if numeric convert else ignore
       }
-    })();
+    });
   }, [open]);
 
   const canSubmit = useMemo(() => {
-    if (selectedUserId === "" || !code) return false;
-    if (employee_id === "" || isNaN(Number(employee_id))) return false;
-    return true;
+    return !(selectedUserId === "" || !code || employee_id === "" || isNaN(Number(employee_id)));
   }, [selectedUserId, code, employee_id]);
-
-  function clearForm() {
-    setEmployeeId("");
-    setCode("");
-    setName("");
-    setTruckPlate("");
-    setBranchCode("");
-    setDivisionId("");
-    setOperation("");
-    setCompanyCode("");
-    setSupplierCode("");
-    setPriceType("");
-    setIsActive(true);
-    setSelectedUserId("");
-    setUserQuery("");
-    setShowUserSuggestions(false);
-    setHighlightIndex(-1);
-  }
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -329,8 +240,8 @@ export function SalesmanFormDialog({
         price_type: price_type === "" ? undefined : price_type,
         isActive,
       };
-      await onSubmit(dto);
-      onClose();
+      await onSubmitAction(dto);
+      onCloseAction();
     } finally {
       setSubmitting(false);
     }
@@ -340,7 +251,7 @@ export function SalesmanFormDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30" onClick={onCloseAction} />
       <div className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl border border-gray-200 p-5">
         <h3 className="text-lg font-semibold mb-4">
           {mode === "create" ? "Register New Salesman" : "Edit Salesman"}
@@ -358,7 +269,6 @@ export function SalesmanFormDialog({
             />
             <Help>Required numeric</Help>
           </div>
-
 
           <div className="relative">
             <InputLabel required>Salesman Name (User)</InputLabel>
@@ -382,7 +292,7 @@ export function SalesmanFormDialog({
                   if (highlightIndex >= 0 && filteredUsers[highlightIndex]) {
                     const o = filteredUsers[highlightIndex];
                     setSelectedUserId(o.value as any);
-                    setUserQuery(truncateNameDisplay(o.label));
+                    setUserQuery(o.label);
                     setShowUserSuggestions(false);
                   }
                 } else if (e.key === "Escape") {
@@ -401,35 +311,32 @@ export function SalesmanFormDialog({
                     className={`px-3 py-2 text-sm cursor-pointer ${idx === highlightIndex ? "bg-gray-100" : ""}`}
                     onMouseDown={() => {
                       setSelectedUserId(o.value as any);
-                      setUserQuery(truncateNameDisplay(o.label));
+                      setUserQuery(o.label);
                       setShowUserSuggestions(false);
                     }}
                   >
-                    {truncateNameDisplay(o.label)}
+                    {o.label}
                   </div>
                 ))}
               </div>
             )}
-            <Help>Start typing to search users; label is truncated for display only.</Help>
           </div>
 
           <div>
             <InputLabel required>Salesman Code</InputLabel>
             <input
-              value={code ?? ""}
+              value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="SM-0001"
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              readOnly={mode === "create"}
-              title={mode === "create" ? "Auto-generated on create" : undefined}
             />
-            <Help>{mode === "create" ? "Auto-generated (next available)." : "Unique code."}</Help>
+            <Help>Unique code auto-generated on create (editable)</Help>
           </div>
 
           <div>
             <InputLabel>Truck Plate</InputLabel>
             <input
-              value={truck_plate ?? ""}
+              value={truck_plate}
               onChange={(e) => setTruckPlate(e.target.value)}
               placeholder="ABC-1234"
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
@@ -439,155 +346,117 @@ export function SalesmanFormDialog({
           <div>
             <InputLabel>Branch</InputLabel>
             <select
-              value={branch_code === "" ? "" : String(branch_code)}
+              value={branch_code}
               onChange={(e) => setBranchCode(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
             >
-              <option value="">Select a branch</option>
-              {branches.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+              <option value="">-- Select Branch --</option>
+              {branches.map((b) => (
+                <option key={String(b.value)} value={String(b.value)}>{b.label}</option>
               ))}
             </select>
-            <Help>From branches API</Help>
           </div>
 
           <div>
             <InputLabel>Division</InputLabel>
             <select
-              value={division_id === "" ? "" : String(division_id)}
+              value={division_id}
               onChange={(e) => setDivisionId(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
             >
-              <option value="">Select a division</option>
-              {divisions.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+              <option value="">-- Select Division --</option>
+              {divisions.map((d) => (
+                <option key={String(d.value)} value={String(d.value)}>{d.label}</option>
               ))}
             </select>
-            <Help>From division API</Help>
           </div>
 
           <div>
             <InputLabel>Operation</InputLabel>
             <select
-              value={operation === "" ? "" : String(operation)}
+              value={operation}
               onChange={(e) => setOperation(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
             >
-              <option value="">Select an operation</option>
-              {operations.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+              <option value="">-- Select Operation --</option>
+              {operationsOpts.map((o) => (
+                <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
               ))}
             </select>
-            <Help>From operation API</Help>
           </div>
 
           <div>
             <InputLabel>Company</InputLabel>
             <select
-              value={company_code === "" ? "" : String(company_code)}
+              value={company_code}
               onChange={(e) => setCompanyCode(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
             >
-              <option value="">Select a company</option>
-              {companies.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+              <option value="">-- Select Company --</option>
+              {companies.map((c) => (
+                <option key={String(c.value)} value={String(c.value)}>{c.label}</option>
               ))}
             </select>
-            <Help>From company API</Help>
           </div>
 
           <div>
             <InputLabel>Supplier</InputLabel>
             <select
-              value={supplier_code === "" ? "" : String(supplier_code)}
+              value={supplier_code}
               onChange={(e) => setSupplierCode(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
             >
-              <option value="">Select a supplier</option>
-              {suppliers.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+              <option value="">-- Select Supplier --</option>
+              {suppliers.map((s) => (
+                <option key={String(s.value)} value={String(s.value)}>{s.label}</option>
               ))}
             </select>
-            <Help>From suppliers API</Help>
           </div>
 
           <div>
             <InputLabel>Price Type</InputLabel>
             <select
-              value={price_type === "" ? "" : String(price_type)}
+              value={price_type}
               onChange={(e) => setPriceType(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
             >
-              <option value="">Select a price type</option>
-              {priceTypes.map((o) => (
-                <option key={String(o.value)} value={String(o.value)}>
-                  {o.label}
-                </option>
+              <option value="">-- Select Price Type --</option>
+              {priceTypes.map((p) => (
+                <option key={String(p.value)} value={String(p.value)}>{p.label}</option>
               ))}
             </select>
-            <Help>From price_types API</Help>
           </div>
 
-          <div className="col-span-1 md:col-span-2 mt-2">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              Active
-              <span className="text-red-500"> *</span>
-            </label>
+          <div>
+            <InputLabel>Status</InputLabel>
+            <select
+              value={isActive ? "1" : "0"}
+              onChange={(e) => setIsActive(e.target.value === "1")}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
+            >
+              <option value="1">Active</option>
+              <option value="0">Inactive</option>
+            </select>
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              className="px-3 py-2 rounded-lg border text-sm"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-3 py-2 rounded-lg border text-sm"
-              onClick={clearForm}
-              disabled={submitting}
-            >
-              Clear
-            </button>
-          </div>
-          <div className="flex items-center gap-3">
-            <div
-              className="text-xs text-gray-500"
-              title="Encoder is automatically set to the logged-in user"
-            >
-              Encoder:{" "}
-              <span className="font-medium">
-                {encoderName ? encoderName : "—"}
-                {encoderId != null ? ` (ID: ${encoderId})` : ""}
-              </span>
-            </div>
-            <button
-              className="px-4 py-2 rounded-lg bg-black text-white text-sm disabled:opacity-50"
-              disabled={!canSubmit || submitting}
-              onClick={handleSubmit}
-            >
-              {mode === "create" ? "Register Salesman" : "Save Changes"}
-            </button>
-          </div>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            className="px-3 py-2 rounded-lg border text-sm"
+            onClick={onCloseAction}
+            disabled={submitting}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 rounded-lg bg-black text-white text-sm disabled:opacity-50"
+            disabled={!canSubmit || submitting}
+            onClick={handleSubmit}
+            type="button"
+          >
+            {submitting ? "Saving..." : mode === "create" ? "Create Salesman" : "Save Changes"}
+          </button>
         </div>
       </div>
     </div>

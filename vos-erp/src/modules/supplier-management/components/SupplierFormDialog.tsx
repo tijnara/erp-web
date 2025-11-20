@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Supplier, UpsertSupplierDTO } from "../types";
-import { apiUrl } from "../../../config/api";
+import { supabase } from "../../../lib/supabase";
 
 type Province = { province_code: string; province_name: string; region_code?: string; psgc_code?: string };
 type City = { city_code: string; city_name: string; province_code: string; region_desc?: string; psgc_code?: string };
@@ -125,68 +125,65 @@ export function SupplierFormDialog({
     (async () => {
       setLoadingGeo(true);
       try {
+        // 1. Load local JSON files
         const [
-          countries,
-          provinces,
-          cities,
-          barangays,
-          deliveryTermsResponse,
-          supplierTypesResponse,
+          countriesMod,
+          provincesMod,
+          citiesMod,
+          barangaysMod,
         ] = await Promise.all([
           import("../../../../data/countries.json"),
           import("../../../../data/province.json"),
           import("../../../../data/city.json"),
           import("../../../../data/barangay.json"),
-          fetch(apiUrl("items/delivery_terms")),
-          fetch(apiUrl("items/transaction_type")),
         ]);
 
-        const deliveryTerms = await deliveryTermsResponse.json();
-        const supplierTypes = await supplierTypesResponse.json();
+        // 2. Fetch dynamic data from Supabase
+        const { data: deliveryTermsData } = await supabase.from("delivery_terms").select("id, delivery_name");
+        const { data: transactionTypeData } = await supabase.from("transaction_types").select("id, transaction_type");
 
-        const provArr: Province[] = (provinces as any).default ?? provinces;
-        const cityArr: City[] = (cities as any).default ?? cities;
-        const brgyArr: Barangay[] = (barangays as any).default ?? barangays;
-        const countryArr: Country[] = (countries as any).default ?? countries;
+        // 3. Process Local Data
+        const provArr: Province[] = (provincesMod as any).default ?? provincesMod;
+        const cityArr: City[] = (citiesMod as any).default ?? citiesMod;
+        const brgyArr: Barangay[] = (barangaysMod as any).default ?? barangaysMod;
+        const countryArr: Country[] = (countriesMod as any).default ?? countriesMod;
 
         setCountries(countryArr);
         setProvinces(provArr);
         setCities(cityArr);
         setBarangays(brgyArr);
 
-        if (deliveryTerms.data) {
-          const terms = deliveryTerms.data as DeliveryTerm[];
-          setDeliveryTermsOptions(terms);
+        // 4. Process Supabase Data
+        if (deliveryTermsData) {
+          setDeliveryTermsOptions(deliveryTermsData);
           if (initial?.delivery_terms) {
-            const term = terms.find((t) => t.id === initial.delivery_terms);
-            if (term) {
-              setDeliveryTerms(term.id);
-            }
+            // Validate that the initial value exists in the loaded options
+            const exists = deliveryTermsData.some((t) => t.id === initial.delivery_terms);
+            if (exists) setDeliveryTerms(initial.delivery_terms);
           }
         }
-        if (supplierTypes.data) {
-          setSupplierTypes(supplierTypes.data);
+
+        if (transactionTypeData) {
+          setSupplierTypes(transactionTypeData);
         }
 
-        // Derive codes from existing text (if any)
+        // 5. Derive codes from existing text (if editing)
         const pCode = findProvinceCodeByName(initial?.state_province ?? "");
         setProvinceCode(pCode);
+
+        // We can try finding city code either globally or scoped to province if pCode exists
         const cCode = findCityCodeByName(initial?.city ?? "", pCode);
         setCityCode(cCode);
+
+        // Ensure name matches code (sanity check for display)
         if (cCode) {
           const c = cityArr.find((x) => x.city_code === cCode);
           if (c) setCity(c.city_name);
         }
+
       } catch (e) {
-        // Fallback: keep empty lists if JSON not available
-        setProvinces([]);
-        setCities([]);
-        setBarangays([]);
-        setCountries([]);
-        setDeliveryTermsOptions([]);
-        setSupplierTypes([]);
-        setProvinceCode("");
-        setCityCode("");
+        console.error("Failed to load form data", e);
+        // Fallback: keep empty lists if error
       } finally {
         setLoadingGeo(false);
       }

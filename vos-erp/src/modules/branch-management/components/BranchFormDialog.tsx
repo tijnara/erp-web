@@ -7,7 +7,7 @@ import Select from "react-select";
 import provinces from "@/data/province.json";
 import cities from "@/data/city.json";
 import barangays from "@/data/barangay.json";
-import { API_BASE_URL } from "@/config/api";
+import { supabase } from "@/lib/supabase";
 
 interface Province {
   province_code: string;
@@ -78,9 +78,16 @@ export function BranchFormDialog({
 
     async function fetchUsers() {
       try {
-        const response = await fetch(`${API_BASE_URL}/items/user`);
-        const data = await response.json();
-        setUsers(data.data);
+        const { data, error } = await supabase
+          .from("user")
+          .select("user_id, user_fname, user_mname, user_lname");
+
+        if (error) {
+          console.error("Error fetching users:", error);
+          return;
+        }
+
+        setUsers(data || []);
       } catch (error) {
         console.error("Failed to fetch users:", error);
       }

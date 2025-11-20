@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 // Minimal session data we need in the app
 export type Session = {
@@ -19,26 +20,69 @@ export function useSession() {
 
     useEffect(() => {
         let alive = true;
-        fetch("/api/auth/session")
-            .then((res) => res.json())
-            .then((data) => {
+
+        async function hydrate() {
+            try {
+                const { data } = await supabase.auth.getSession();
+                const s = data.session;
                 if (alive) {
-                    if (data.user) {
-                        setSession(data);
+                    if (s?.user) {
+                        const user = s.user;
+                        const fullName =
+                            (user.user_metadata?.full_name || [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")) ||
+                            user.email ||
+                            user.id;
+                        setSession({
+                            user: {
+                                id: user.id,
+                                email: user.email || "",
+                                name: fullName,
+                                first_name: user.user_metadata?.first_name,
+                                last_name: user.user_metadata?.last_name,
+                            },
+                            accessToken: s.access_token,
+                        });
                     } else {
                         setSession(null);
                     }
                     setLoading(false);
                 }
-            })
-            .catch(() => {
+            } catch (err) {
                 if (alive) {
                     setSession(null);
                     setLoading(false);
                 }
-            });
+            }
+        }
+
+        hydrate();
+
+        const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
+            if (!alive) return;
+            if (newSession?.user) {
+                const user = newSession.user;
+                const fullName =
+                    (user.user_metadata?.full_name || [user.user_metadata?.first_name, user.user_metadata?.last_name].filter(Boolean).join(" ")) ||
+                    user.email ||
+                    user.id;
+                setSession({
+                    user: {
+                        id: user.id,
+                        email: user.email || "",
+                        name: fullName,
+                        first_name: user.user_metadata?.first_name,
+                        last_name: user.user_metadata?.last_name,
+                    },
+                    accessToken: newSession.access_token,
+                });
+            } else {
+                setSession(null);
+            }
+        });
+
         return () => {
             alive = false;
+            subscription.subscription.unsubscribe();
         };
     }, []);
 
