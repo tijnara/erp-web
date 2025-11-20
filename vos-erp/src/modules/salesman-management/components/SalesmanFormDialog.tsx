@@ -1,7 +1,7 @@
 // src/modules/salesman-management/components/SalesmanFormDialog.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import type { Salesman, UpsertSalesmanDTO } from "../types";
 import { supabase } from "@/lib/supabase";
 
@@ -11,7 +11,6 @@ type Branch = { id: number; branch_name: string; branch_code?: string };
 type Operation = { id: number; operation_name: string };
 type Company = { company_id: number; company_name: string; company_code?: string };
 type Supplier = { id: number; supplier_name: string; supplier_shortcut?: string };
-type Division = { id: number; division_name: string };
 type PriceType = { price_type_id: number; price_type_name: string };
 type UserRow = { user_id: number; user_fname?: string; user_lname?: string };
 
@@ -46,10 +45,6 @@ async function fetchCompanies(): Promise<Option[]> {
 async function fetchSuppliers(): Promise<Option[]> {
   const rows = await safeQuery<Supplier[]>(supabase.from("suppliers").select("id, supplier_name, supplier_shortcut"));
   return toOptions(rows as Supplier[], (r) => ({ value: r.supplier_shortcut || r.id, label: r.supplier_name }));
-}
-async function fetchDivisions(): Promise<Option[]> {
-  // Table does not exist in database
-  return [];
 }
 async function fetchPriceTypes(): Promise<Option[]> {
   const rows = await safeQuery<PriceType[]>(supabase.from("price_types").select("price_type_id, price_type_name"));
@@ -103,12 +98,14 @@ export function SalesmanFormDialog({
   initial,
   onCloseAction,
   onSubmitAction,
+  onClose, // NEW optional alias prop
 }: {
   open: boolean;
   mode: "create" | "edit";
   initial?: Partial<Salesman>;
-  onCloseAction: () => void;
+  onCloseAction?: () => void; // made optional
   onSubmitAction: (dto: UpsertSalesmanDTO) => Promise<void>;
+  onClose?: () => void; // NEW optional
 }) {
   const [employee_id, setEmployeeId] = useState<number | "">(initial?.employee_id ?? "");
   const [code, setCode] = useState(initial?.code ?? "");
@@ -128,7 +125,6 @@ export function SalesmanFormDialog({
   const [operationsOpts, setOperationsOpts] = useState<Option[]>([]);
   const [companies, setCompanies] = useState<Option[]>([]);
   const [suppliers, setSuppliers] = useState<Option[]>([]);
-  const [divisions, setDivisions] = useState<Option[]>([]);
   const [priceTypes, setPriceTypes] = useState<Option[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -138,6 +134,14 @@ export function SalesmanFormDialog({
   const [userQuery, setUserQuery] = useState("");
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState<number>(-1);
+
+  // Unified close handler (prefers onCloseAction then onClose)
+  const invokeClose = useCallback(() => {
+    if (submitting) return; // do not close while submitting
+    const fn = onCloseAction || onClose;
+    if (typeof fn === "function") fn();
+    else console.warn("[SalesmanFormDialog] No close handler provided (onCloseAction/onClose)");
+  }, [onCloseAction, onClose, submitting]);
 
   // When user changes, auto-fill employee_id and name
   useEffect(() => {
@@ -162,7 +166,6 @@ export function SalesmanFormDialog({
     fetchOperations().then(setOperationsOpts);
     fetchCompanies().then(setCompanies);
     fetchSuppliers().then(setSuppliers);
-    fetchDivisions().then(setDivisions);
     fetchPriceTypes().then(setPriceTypes);
     fetchUsers(operation).then(({ options, byId }) => {
       setUsers(options);
@@ -216,14 +219,21 @@ export function SalesmanFormDialog({
     });
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const escListener = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        invokeClose();
+      }
+    };
+    window.addEventListener("keydown", escListener);
+    return () => window.removeEventListener("keydown", escListener);
+  }, [open, invokeClose]);
+
   const canSubmit = useMemo(() => {
     return !(selectedUserId === "" || !code || employee_id === "" || isNaN(Number(employee_id)));
   }, [selectedUserId, code, employee_id]);
-
-  function handleClose() {
-    if (submitting) return; // Prevent closing while submitting
-    onCloseAction();
-  }
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -246,7 +256,7 @@ export function SalesmanFormDialog({
         isActive,
       };
       await onSubmitAction(dto);
-      onCloseAction();
+      invokeClose();
     } finally {
       setSubmitting(false);
     }
@@ -260,7 +270,7 @@ export function SalesmanFormDialog({
         className="absolute inset-0 bg-black/30"
         onClick={(e) => {
           e.stopPropagation();
-          handleClose();
+          invokeClose();
         }}
       />
       <div className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl border border-gray-200 p-5">
@@ -369,20 +379,6 @@ export function SalesmanFormDialog({
           </div>
 
           <div>
-            <InputLabel>Division</InputLabel>
-            <select
-              value={division_id}
-              onChange={(e) => setDivisionId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white"
-            >
-              <option value="">-- Select Division --</option>
-              {divisions.map((d) => (
-                <option key={String(d.value)} value={String(d.value)}>{d.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
             <InputLabel>Operation</InputLabel>
             <select
               value={operation}
@@ -454,7 +450,7 @@ export function SalesmanFormDialog({
         <div className="mt-6 flex items-center justify-end gap-2">
           <button
             className="px-3 py-2 rounded-lg border text-sm"
-            onClick={handleClose}
+            onClick={invokeClose}
             disabled={submitting}
             type="button"
           >
