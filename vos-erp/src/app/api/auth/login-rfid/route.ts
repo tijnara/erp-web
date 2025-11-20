@@ -4,23 +4,13 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { SignJWT } from 'jose';
-
-const DIRECTUS = (process.env.NEXT_PUBLIC_DIRECTUS_URL ?? '').replace(/\/+$/,'');
-const M_EMAIL = process.env.DIRECTUS_MACHINE_EMAIL;
-const M_PASS  = process.env.DIRECTUS_MACHINE_PASSWORD;
+import { supabase } from '@/lib/supabase';
 
 const APP_ACCESS  = process.env.APP_ACCESS_COOKIE  ?? 'vos_app_access';
 const APP_REFRESH = process.env.APP_REFRESH_COOKIE ?? 'vos_app_refresh';
 const secret = new TextEncoder().encode(process.env.AUTH_JWT_SECRET ?? 'dev-secret-change-me');
 
 const Body = z.object({ rf: z.string().min(1) });
-
-function bitAsBool(v: any): boolean {
-    if (v === 1 || v === true) return true;
-    if (v === 0 || v === false || v == null) return false;
-    if (typeof v === 'object' && Array.isArray(v.data)) return v.data[0] === 1;
-    return false;
-}
 
 async function sign(payload: any, seconds: number) {
     return await new SignJWT(payload)
@@ -32,68 +22,45 @@ async function sign(payload: any, seconds: number) {
 
 export async function POST(req: Request) {
     try {
-        if (!DIRECTUS) {
-            return NextResponse.json({ error: 'Missing NEXT_PUBLIC_DIRECTUS_URL' }, { status: 500 });
-        }
-
         const body = await req.json().catch(() => ({}));
         const p = Body.safeParse(body);
         if (!p.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
 
-        // 1) optional: login as machine user for a scoped token
-        let token: string | undefined;
-        if (M_EMAIL && M_PASS) {
-            const authRes = await fetch(`${DIRECTUS}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: M_EMAIL, password: M_PASS }),
-            });
-            const auth = await authRes.json().catch(() => ({}));
-            if (authRes.ok) {
-                token = auth?.data?.access_token;
-            } else {
-                console.warn('RFID machine login failed:', authRes.status, auth?.errors?.[0]?.message);
-                token = undefined; // proceed without token; permissions may allow public lookup
-            }
+        // Query user by RFID from Supabase
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('user_id, user_email, user_fname, user_lname, role_id, is_admin, rf_id, is_deleted, status')
+            .eq('rf_id', p.data.rf)
+            .single();
+
+        if (error || !user) {
+            return NextResponse.json({ error: 'RFID not found' }, { status: 404 });
         }
 
-        // 2) lookup by rf_id (DO NOT request user_password)
-        const url =
-            `${DIRECTUS}/items/user` +
-            `?limit=1` +
-            `&fields=user_id,user_email,user_fname,user_lname,role_id,isAdmin,rf_id,is_deleted,isDeleted` +
-            `&filter[rf_id][_eq]=${encodeURIComponent(p.data.rf)}`;
-
-        const ures = await fetch(url, {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-            cache: 'no-store',
-        });
-
-        const json = await ures.json().catch(() => ({}));
-
-        if (!ures.ok) {
-            const msg = json?.errors?.[0]?.message || 'RFID lookup failed (permissions /items/user)';
-            return NextResponse.json({ error: msg }, { status: ures.status || 401 });
-        }
-
-        const u = json?.data?.[0];
-        if (!u) return NextResponse.json({ error: 'RFID not found' }, { status: 404 });
-
-        const deleted  = bitAsBool(u.is_deleted) || bitAsBool(u.isDeleted);
-        const inactive = (u.status ?? 'active') === 'inactive';
-        if (deleted || inactive) {
+        // Check if account is deleted or inactive
+        if (user.is_deleted || user.status === 'inactive') {
             return NextResponse.json({ error: 'Account disabled' }, { status: 403 });
         }
 
-        // 3) mint app-session cookies (JWT)
-        const name = [u.user_fname, u.user_lname].filter(Boolean).join(' ') || u.user_email || u.rf_id || '';
+        // Create session token
+        const sessionId = crypto.randomUUID();
+
+        // Update user's session token in database
+        await supabase
+            .from('users')
+            .update({ session_token: sessionId })
+            .eq('user_id', user.user_id);
+
+        // Mint app-session cookies (JWT)
+        const name = [user.user_fname, user.user_lname].filter(Boolean).join(' ') || user.user_email || user.rf_id || '';
         const payload = {
-            sub: String(u.user_id),
-            email: u.user_email ?? '',
+            sub: String(user.user_id),
+            email: user.user_email ?? '',
             name,
-            isAdmin: !!u.isAdmin,
-            role_id: u.role_id ?? null,
+            isAdmin: !!user.is_admin,
+            role_id: user.role_id ?? null,
             auth_kind: 'rfid' as const,
+            jti: sessionId,
         };
 
         const access  = await sign(payload, 60 * 15);       // 15m

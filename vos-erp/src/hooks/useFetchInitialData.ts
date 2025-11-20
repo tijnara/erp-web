@@ -1,5 +1,5 @@
 import { usePurchaseOrderStore } from "@/store/usePurchaseOrderStore";
-import { API_BASE } from "@/constants";
+import { supabase } from "@/lib/supabase";
 
 export const useFetchInitialData = () => {
   const {
@@ -14,29 +14,39 @@ export const useFetchInitialData = () => {
 
   const fetchInitialData = async () => {
     try {
-      const [poData, productData, receivingData, suppliersData, branchesData, lineDiscountsData, taxRatesData] = await Promise.all([
-        fetch(`${API_BASE}/purchase_order`).then(res => res.json()),
-        fetch(`${API_BASE}/purchase_order_products`).then(res => res.json()),
-        fetch(`${API_BASE}/purchase_order_receiving`).then(res => res.json()),
-        fetch(`${API_BASE}/suppliers`).then(res => res.json()),
-        fetch(`${API_BASE}/branches`).then(res => res.json()),
-        fetch(`${API_BASE}/line_discount?limit=-1`).then(res => res.json()),
-        fetch(`${API_BASE}/tax_rates`).then(res => res.json()),
+      // Fetch all data from Supabase
+      const [
+        { data: poData },
+        { data: productData },
+        { data: receivingData },
+        { data: suppliersData },
+        { data: branchesData },
+        { data: lineDiscountsData },
+        { data: taxRatesData },
+      ] = await Promise.all([
+        supabase.from("purchase_order").select("*"),
+        supabase.from("purchase_order_products").select("*"),
+        supabase.from("purchase_order_receiving").select("*"),
+        supabase.from("suppliers").select("*"),
+        supabase.from("branches").select("*"),
+        supabase.from("line_discount").select("*"),
+        supabase.from("tax_rates").select("*"),
       ]);
-      setPurchaseOrders(poData.data || []);
-      setProducts(productData.data || []);
-      setReceiving(receivingData.data || []);
-      setSuppliers(suppliersData.data || []);
-      setBranches(branchesData.data || []);
-      setLineDiscounts(lineDiscountsData.data || []);
-      if (taxRatesData.data && taxRatesData.data.length > 0) {
+
+      setPurchaseOrders(poData || []);
+      setProducts(productData || []);
+      setReceiving(receivingData || []);
+      setSuppliers(suppliersData || []);
+      setBranches(branchesData || []);
+      setLineDiscounts(lineDiscountsData || []);
+
+      if (taxRatesData && taxRatesData.length > 0) {
         setTaxRates({
-          VATRate: parseFloat(taxRatesData.data[0].VATRate) || 0,
-          WithholdingRate: parseFloat(taxRatesData.data[0].WithholdingRate) || 0,
+          VATRate: parseFloat(taxRatesData[0].VATRate) || 0,
+          WithholdingRate: parseFloat(taxRatesData[0].WithholdingRate) || 0,
         });
       }
     } catch (error) {
-      // You can add error handling here
       console.error("Error fetching initial data:", error);
     }
   };

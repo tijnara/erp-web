@@ -1,19 +1,18 @@
 // src/config/api.ts
-// Centralized API base URL and helpers for vos-erp
+// API configuration for vos-erp
+// Note: This file is kept for legacy compatibility but most API calls now use Supabase directly
 
 export type ApiConfig = {
   baseUrl: string;
 };
 
-// UPDATE: Use localhost for development, or an Environment Variable
+// Legacy support - no longer used with Supabase
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
 
-// Resolve base URL with a runtime override if provided via window.__VOS_API_BASE__
 function resolveBaseUrl(): string {
   const w: any = typeof window !== "undefined" ? (window as any) : undefined;
   const fromWindow = w?.__VOS_API_BASE__;
   if (typeof fromWindow === "string" && fromWindow.trim().length > 0) {
-    // Ensure no trailing slash
     return fromWindow.replace(/\/+$/, "");
   }
   return DEFAULT_BASE_URL;

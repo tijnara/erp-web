@@ -1,7 +1,6 @@
 // src/app/api/assets-equipments/[...parts]/route.ts
-import {NextRequest, NextResponse} from 'next/server';
-
-const API_BASE = 'http://100.119.3.44:8090/items';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 const ENDPOINT_MAP: Record<string, string> = {
     'assets': 'assets_and_equipment',
@@ -9,72 +8,102 @@ const ENDPOINT_MAP: Record<string, string> = {
     'types': 'item_type',
     'classifications': 'item_classification',
     'departments': 'department',
-    'users': 'user',
+    'users': 'users',
 };
 
-async function proxyRequest(request: NextRequest) {
-    const { pathname, search } = new URL(request.url);
+async function handleRequest(request: NextRequest) {
+    const { pathname, searchParams } = new URL(request.url);
     const parts = pathname.split('/').filter(Boolean);
-    // parts will be ['api', 'assets-equipments', 'items', '1'] for /api/assets-equipments/items/1
     const resource = parts[2];
-    const idPart = parts.slice(3).join('/');
+    const id = parts[3];
 
-    const mappedResource = ENDPOINT_MAP[resource] || resource;
-
-    const targetUrl = `${API_BASE}/${mappedResource}${idPart ? `/${idPart}` : ''}${search}`;
-
-    const options: RequestInit = {
-        method: request.method,
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : undefined,
-        cache: 'no-store',
-    };
+    const tableName = ENDPOINT_MAP[resource] || resource;
 
     try {
-        console.log(`[ASSET_PROXY] ${request.method} to ${targetUrl}`);
-        const apiResponse = await fetch(targetUrl, options);
+        if (request.method === 'GET') {
+            if (id) {
+                // Get single item
+                const { data, error } = await supabase
+                    .from(tableName)
+                    .select('*')
+                    .eq('id', id)
+                    .single();
 
-        if (apiResponse.status === 204) {
+                if (error) throw error;
+                return NextResponse.json(data);
+            } else {
+                // Get list
+                const limit = parseInt(searchParams.get('limit') || '50');
+                const offset = parseInt(searchParams.get('offset') || '0');
+
+                const { data, error, count } = await supabase
+                    .from(tableName)
+                    .select('*', { count: 'exact' })
+                    .range(offset, offset + limit - 1);
+
+                if (error) throw error;
+                return NextResponse.json({ data, total: count });
+            }
+        }
+
+        if (request.method === 'POST') {
+            const body = await request.json();
+            const { data, error } = await supabase
+                .from(tableName)
+                .insert(body)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return NextResponse.json(data, { status: 201 });
+        }
+
+        if (request.method === 'PUT' && id) {
+            const body = await request.json();
+            const { data, error } = await supabase
+                .from(tableName)
+                .update(body)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return NextResponse.json(data);
+        }
+
+        if (request.method === 'DELETE' && id) {
+            const { error } = await supabase
+                .from(tableName)
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
             return new NextResponse(null, { status: 204 });
         }
 
-        const text = await apiResponse.text();
-        if (text) {
-            try {
-                const json = JSON.parse(text);
-                // The API wraps responses in a 'data' object. We unwrap it here.
-                if (json.data) {
-                    return NextResponse.json(json.data, { status: apiResponse.status });
-                }
-                return NextResponse.json(json, { status: apiResponse.status });
-            } catch (e) {
-                // If it's not JSON, return as plain text.
-                return new NextResponse(text, { status: apiResponse.status, headers: { 'Content-Type': 'text/plain' } });
-            }
-        }
-        return new NextResponse(null, { status: apiResponse.status });
+        return NextResponse.json({ message: 'Method not allowed' }, { status: 405 });
 
-    } catch (error) {
-        console.error(`[ASSET_PROXY_ERROR]`, error);
-        return NextResponse.json({ message: 'Error proxying request to the asset API.' }, { status: 502 });
+    } catch (error: any) {
+        console.error('[ASSET_ERROR]', error);
+        return NextResponse.json(
+            { message: error.message || 'Database error' },
+            { status: 500 }
+        );
     }
 }
 
 export async function GET(request: NextRequest) {
-    return proxyRequest(request);
+    return handleRequest(request);
 }
 
 export async function POST(request: NextRequest) {
-    return proxyRequest(request);
+    return handleRequest(request);
 }
 
 export async function PUT(request: NextRequest) {
-    return proxyRequest(request);
+    return handleRequest(request);
 }
 
 export async function DELETE(request: NextRequest) {
-    return proxyRequest(request);
+    return handleRequest(request);
 }

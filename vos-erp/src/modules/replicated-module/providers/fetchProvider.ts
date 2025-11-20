@@ -1,26 +1,32 @@
-import { apiUrl } from "@/config/api";
+import { supabase } from "@/lib/supabase";
 
 export function fetchProvider() {
-    const apiUrlBase = apiUrl("replicated");
-
     async function fetchReplicated(page: number) {
-        const response = await fetch(`${apiUrlBase}?page=${page}&limit=20`);
-        if (!response.ok) {
-            throw new Error("Failed to fetch replicated data");
+        const limit = 20;
+        const offset = (page - 1) * limit;
+
+        const { data, error, count } = await supabase
+            .from("replicated")
+            .select("*", { count: "exact" })
+            .range(offset, offset + limit - 1);
+
+        if (error) {
+            throw new Error("Failed to fetch replicated data: " + error.message);
         }
-        return response.json();
+
+        return {
+            data: data || [],
+            total: count || 0,
+        };
     }
 
     async function registerReplicated(data: any) {
-        const response = await fetch(apiUrlBase, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            throw new Error("Failed to register replicated data");
+        const { error } = await supabase
+            .from("replicated")
+            .insert(data);
+
+        if (error) {
+            throw new Error("Failed to register replicated data: " + error.message);
         }
     }
 

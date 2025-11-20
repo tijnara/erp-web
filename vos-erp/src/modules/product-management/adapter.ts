@@ -8,7 +8,8 @@ function asBool(v: any): boolean {
     return Boolean(v);
 }
 
-export function fromDirectusRow(row: any): Product {
+// Transform database row to UI Product model
+export function fromDatabaseRow(row: any): Product {
     const unit = row.unit_of_measurement
         ? ({ id: row.unit_of_measurement.unit_id, name: row.unit_of_measurement.unit_name, shortcut: row.unit_of_measurement.unit_shortcut ?? null } as UnitRef)
         : null;
@@ -24,7 +25,7 @@ export function fromDirectusRow(row: any): Product {
         name: row.product_name ?? '',
         description: row.description ?? null,
         weight_kg: row.product_weight ?? null,
-        stock_qty: row.stock_qty ?? null, // Not in sample, but good to have
+        stock_qty: row.stock_qty ?? null,
         maintaining_quantity: row.maintaining_quantity ?? null,
         base_price: row.price_per_unit ?? null,
         cost: row.cost_per_unit ?? null,
@@ -37,7 +38,8 @@ export function fromDirectusRow(row: any): Product {
     };
 }
 
-export function toDirectusBody(dto: UpsertProductDTO) {
+// Transform UI DTO to database format
+export function toDatabaseBody(dto: UpsertProductDTO) {
     return {
         product_name: dto.name,
         product_code: dto.code ?? null,
@@ -58,6 +60,10 @@ export function toDirectusBody(dto: UpsertProductDTO) {
         product_section: dto.sectionId ?? null,
     };
 }
+
+// Legacy exports for backward compatibility
+export const fromDirectusRow = fromDatabaseRow;
+export const toDirectusBody = toDatabaseBody;
 
 // Helper to keep fields list in one place
 export const ENRICHED_FIELDS =
