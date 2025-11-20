@@ -12,10 +12,10 @@ import { AddProductModal } from "./AddProductModal";
 import { ReceiveStockModal } from "./ReceiveStockModal";
 import axios from "axios"; // Ensure axios is imported
 
-// Updated type definition for PurchaseOrderProduct to include 'purchase_order_id'
+// Updated type definition for PurchaseOrderProduct to use standard 'id' column
 interface PurchaseOrderProduct {
-  purchase_order_product_id: number;
-  purchase_order_id: number; // Added this property
+  id: number; // Standard Supabase primary key
+  purchase_order_id: number;
   product_id: number;
   branch_id: number;
   ordered_quantity: number;
@@ -326,7 +326,7 @@ export function PurchaseOrderView() {
                                             <tbody>
                                             {productsForPO.length > 0 ? productsForPO.map(p => (
                                                 <tr
-                                                    key={p.purchase_order_product_id}
+                                                    key={p.id}
                                                     className="bg-white border-b hover:bg-gray-50 cursor-pointer"
                                                     onClick={() => {
                                                         setSelectedPOProduct(p);
@@ -556,7 +556,7 @@ suppliers={suppliers}
 }}
                             onUpdate={(updatedData) => {
                                 const updatedProducts = products.map(p =>
-                                    p.purchase_order_product_id === selectedPOProduct.purchase_order_product_id
+                                    p.id === selectedPOProduct.id
                                         ? { ...p, ...updatedData }
                                         : p
                                 );
@@ -655,7 +655,7 @@ function ProductDetailsModalContent({ product, getBranchName, onUpdate, onClose 
         }
 
         try {
-            const res = await fetch(`/api/purchase_order_products/${product.purchase_order_product_id}`, {
+            const res = await fetch(`/api/purchase_order_products/${product.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
