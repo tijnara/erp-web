@@ -29,7 +29,6 @@ interface Barangay {
 interface User {
   user_id: number;
   user_fname: string;
-  user_mname: string;
   user_lname: string;
 }
 
@@ -79,8 +78,8 @@ export function BranchFormDialog({
     async function fetchUsers() {
       try {
         const { data, error } = await supabase
-          .from("user")
-          .select("user_id, user_fname, user_mname, user_lname");
+          .from("users")
+          .select("user_id, user_fname, user_lname");
 
         if (error) {
           console.error("Error fetching users:", error);
@@ -147,7 +146,7 @@ export function BranchFormDialog({
   const userOptions = useMemo(() => {
     return users.map(user => ({
       value: user.user_id.toString(),
-      label: `${user.user_fname} ${user.user_mname} ${user.user_lname}`
+      label: `${user.user_fname} ${user.user_lname}`
     }));
   }, [users]);
 

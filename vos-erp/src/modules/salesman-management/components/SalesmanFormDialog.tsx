@@ -57,7 +57,7 @@ async function fetchPriceTypes(): Promise<Option[]> {
 }
 
 async function fetchUsers(op?: string | number): Promise<{ options: Option[]; byId: Record<string, UserRow> }> {
-  let query = supabase.from("user").select("user_id, user_fname, user_lname");
+  let query = supabase.from("users").select("user_id, user_fname, user_lname");
   if (op) {
     query = query.eq("operation", op);
   }
