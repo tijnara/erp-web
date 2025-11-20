@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { User, UpsertUserDTO } from "../types";
-import { apiUrl, itemsUrl } from "../../../config/api";
+import { apiUrl } from "../../../config/api";
 
 type Province = { province_code: string; province_name: string; region_code?: string; psgc_code?: string };
 type City = { city_code: string; city_name: string; province_code: string; region_desc?: string; psgc_code?: string };
@@ -136,7 +136,7 @@ export function UserFormDialog({
     setBday(initial?.user_bday ?? "");
     setRfId(initial?.rf_id ?? "");
 
-    fetch(itemsUrl("department"))
+    fetch("/api/lookup/department")
     .then((res) => res.json())
     .then((data) => {
       setDepartments(data.data);

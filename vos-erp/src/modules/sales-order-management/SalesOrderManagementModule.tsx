@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from "@/components/ui/label";
 import axios from 'axios';
 import AsyncSelect from 'react-select/async';
-import { itemsUrl } from "@/config/api";
 
 // --- Static Data Imports ---
 import provincesData from "@/public/province.json";
@@ -127,12 +126,12 @@ export default function SalesOrderManagementModule() {
                 const [
                     roomUseRes, propTypeRes, sunExpRes, insulationRes, voltageRes, unitTypeRes
                 ] = await Promise.all([
-                    axios.get(itemsUrl("room_uses")),
-                    axios.get(itemsUrl("property_types")),
-                    axios.get(itemsUrl("sun_exposures")),
-                    axios.get(itemsUrl("insulation_types")),
-                    axios.get(itemsUrl("supply_voltages")),
-                    axios.get(itemsUrl("ac_unit_types"))
+                    axios.get("/api/lookup/room_uses"),
+                    axios.get("/api/lookup/property_types"),
+                    axios.get("/api/lookup/sun_exposures"),
+                    axios.get("/api/lookup/insulation_types"),
+                    axios.get("/api/lookup/supply_voltages"),
+                    axios.get("/api/lookup/ac_unit_types")
                 ]);
 
                 setRoomUses(roomUseRes.data.data.map((item: any) => ({ id: item.id, name: item.name })));
@@ -156,7 +155,7 @@ export default function SalesOrderManagementModule() {
         if (inputValue.length < 2) return [];
         try {
             // Updated to use new customer API and fields
-            const response = await axios.get(itemsUrl(`customer?search=${inputValue}`));
+            const response = await axios.get(`/api/lookup/customer?search=${inputValue}`);
             const users = response.data.data || [];
             return users.map((user: ApiCustomer) => ({
                 label: `${user.customer_name} (${user.customer_email})`,
@@ -284,11 +283,11 @@ export default function SalesOrderManagementModule() {
 
             if (clientInfo.id) {
                 // UPDATE existing customer
-                const response = await axios.patch(`${itemsUrl()}/items/customer/${clientInfo.id}`, customerPayload);
+                const response = await axios.patch(`/api/customer/${clientInfo.id}`, customerPayload);
                 customerId = response.data.data.id;
             } else {
                 // CREATE new customer
-                const response = await axios.post(`${itemsUrl()}/items/customer`, customerPayload);
+                const response = await axios.post("/api/customer", customerPayload);
                 customerId = response.data.data.id;
             }
 
@@ -298,7 +297,7 @@ export default function SalesOrderManagementModule() {
 
             // --- STEP 2: Create Installation Request ---
             // Fetch existing installation requests to determine the next ir_code
-            const existingRequestsResponse = await axios.get(`${itemsUrl()}/items/installation_requests?fields=ir_code`);
+            const existingRequestsResponse = await axios.get("/api/installation_requests?fields=ir_code");
             const existingRequests = existingRequestsResponse.data.data || [];
 
             // Determine the highest ir_code and generate the next one
@@ -329,7 +328,7 @@ export default function SalesOrderManagementModule() {
             console.log("Generated ir_code:", nextIrCode); // Log the generated ir_code for debugging
             console.log("Installation Request Payload:", installationRequestPayload); // Log the payload for debugging
 
-            const requestResponse = await axios.post(`${itemsUrl()}/items/installation_requests`, installationRequestPayload);
+            const requestResponse = await axios.post("/api/installation_requests", installationRequestPayload);
             const newRequestId = requestResponse.data.data.id;
             console.log("Created installation request:", requestResponse.data.data);
 
@@ -340,7 +339,7 @@ export default function SalesOrderManagementModule() {
                 const uploadPromises = attachments.map(file => {
                     const formData = new FormData();
                     formData.append('file', file);
-                    return axios.post(`${itemsUrl()}/files`, formData, {
+                    return axios.post("/api/files", formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
                 });
@@ -360,7 +359,7 @@ export default function SalesOrderManagementModule() {
                     };
                 });
 
-                await axios.post(`${itemsUrl()}/items/attachments`, attachmentPayloads);
+                await axios.post("/api/attachments", attachmentPayloads);
                 console.log("Attachment records created.");
             }
 

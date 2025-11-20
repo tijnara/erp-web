@@ -27,7 +27,43 @@ const MAP: Record<
         idField: "category_id"
     },
     segment: {path: "segment", fields: "segment_id,segment_name", nameField: "segment_name", idField: "segment_id"},
-    sections: {path: "sections", fields: "section_id,section_name", nameField: "section_name", idField: "section_id"}
+    sections: {path: "sections", fields: "section_id,section_name", nameField: "section_name", idField: "section_id"},
+    branches: {
+        path: "branches",
+        fields: "branch_id,branch_name,branch_code",
+        nameField: "branch_name",
+        idField: "branch_id"
+    },
+    company: {
+        path: "company",
+        fields: "company_id,company_name,company_code",
+        nameField: "company_name",
+        idField: "company_id"
+    },
+    division: {
+        path: "division",
+        fields: "division_id,division_name",
+        nameField: "division_name",
+        idField: "division_id"
+    },
+    suppliers: {
+        path: "suppliers",
+        fields: "id,supplier_name",
+        nameField: "supplier_name",
+        idField: "id"
+    },
+    operation: {
+        path: "operation",
+        fields: "id,name,code",
+        nameField: "name",
+        idField: "id"
+    },
+    price_types: {
+        path: "price_types",
+        fields: "price_type_id,price_type_name,code",
+        nameField: "price_type_name",
+        idField: "price_type_id"
+    }
 };
 
 export async function GET(req: NextRequest, context: { params: Promise<{ resource: string }> }) {

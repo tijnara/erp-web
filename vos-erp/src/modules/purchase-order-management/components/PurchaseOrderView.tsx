@@ -1,18 +1,16 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { AsyncSelect } from "@/components/ui/AsyncSelect";
 import { useSession } from "@/hooks/use-session";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { API_BASE, INVENTORY_STATUS, INVENTORY_STATUS_COLOR, PAYMENT_STATUS, PAYMENT_STATUS_COLOR } from "@/constants";
-import { getSupplierName, getBranchName, calculateValues } from "@/utils";
+import { INVENTORY_STATUS, INVENTORY_STATUS_COLOR, PAYMENT_STATUS, PAYMENT_STATUS_COLOR } from "@/constants";
+import { getSupplierName, getBranchName } from "@/utils";
 import { usePurchaseOrderStore } from "@/store/usePurchaseOrderStore";
 import { useFetchInitialData } from "@/hooks/useFetchInitialData";
 import { CreatePOModal } from "./CreatePOModal";
 import { AddProductModal } from "./AddProductModal";
 import { ReceiveStockModal } from "./ReceiveStockModal";
 import axios from "axios"; // Ensure axios is imported
-import { itemsUrl } from "@/config/api";
 
 // Updated type definition for PurchaseOrderProduct to include 'purchase_order_id'
 interface PurchaseOrderProduct {
@@ -30,14 +28,12 @@ interface PurchaseOrderProduct {
 }
 
 // Added missing type definition for branches
-const branches: { id: number; branch_name: string }[] = [];
 
 export function PurchaseOrderView() {
     const todayDate = new Date().toISOString().slice(0, 10);
     const {
         purchaseOrders,
         products,
-        receiving,
         suppliers,
         branches,
         lineDiscounts,
@@ -66,19 +62,11 @@ export function PurchaseOrderView() {
     const [orderedQuantity] = useState<number>(1);
     const [unitPrice, setUnitPrice] = useState<string>("");
     const [discountedPrice, setDiscountedPrice] = useState<string>("");
-    const [vatAmount, setVatAmount] = useState<string>("");
-    const [withholdingAmount, setWithholdingAmount] = useState<string>("");
-    const [totalAmount, setTotalAmount] = useState<string>("");
 
     // Added missing state setters
     const [priceTypesLoading] = useState<boolean>(false); // Retained only the necessary part
     const [paymentTerms] = useState([]); // Retained only the necessary part
     const [paymentTermsLoading] = useState<boolean>(false); // Retained only the necessary part
-
-    // Removed unused constants
-    const [productUrlLoading, setProductUrlLoading] = useState<boolean>(false);
-    const [productFetchUrl, setProductFetchUrl] = useState<string | null>(null);
-    const [supplierProductsMap, setSupplierProductsMap] = useState<Map<number, any>>(new Map());
 
     // Added missing state variables
     const [visiblePOCount, setVisiblePOCount] = useState<number>(10);
@@ -97,8 +85,8 @@ export function PurchaseOrderView() {
     // Fetch initial data using custom hook
     useEffect(() => {
         fetchInitialData();
-        fetch(`${API_BASE}/receiving_type`).then(res => res.json()).then(data => setReceivingTypes(data.data || []));
-        fetch(`${API_BASE}/price_types?limit=-1&fields=*`).then(res => res.json()).then(json => {
+        fetch("/api/lookup/receiving_type").then(res => res.json()).then(data => setReceivingTypes(data.data || []));
+        fetch("/api/lookup/price_types?limit=-1&fields=*").then(res => res.json()).then(json => {
             const raw = Array.isArray(json) ? json : (json?.data ?? []);
             type PriceRaw = Record<string, unknown>;
             const items = (raw || []).map((p: unknown) => {
@@ -125,46 +113,6 @@ export function PurchaseOrderView() {
     }, [products, activePOId]);
     const [receivingForPO, setReceivingForPO] = useState<any[]>([]);
 
-    // Corrected usage of state setters
-    useEffect(() => {
-        if (showProductModal && activePO) {
-            const supplierId = activePO.supplier_id;
-            if (!supplierId) return;
-
-            setProductUrlLoading(true);
-            setProductFetchUrl(null);
-
-            fetch(`${API_BASE}/supplier_discount_products?filter[supplier_id]=${supplierId}&limit=-1`)
-                .then(res => res.json())
-                .then(discountData => {
-                    const productsData = discountData.data || [];
-                    const newMap = new Map<number, any>();
-                    productsData.forEach((item: any) => newMap.set(item.product_id, item));
-                    setSupplierProductsMap(newMap);
-
-                    const productIds = Array.from(newMap.keys());
-
-                    if (productIds.length > 0) {
-                        const url = `${API_BASE}/products?filter[product_id][_in]=${productIds.join(",")}`;
-                        setProductFetchUrl(url);
-                    } else {
-                        setProductFetchUrl(`${API_BASE}/products?filter[product_id][_in]=-1`);
-                    }
-                })
-                .catch(err => {
-                    console.error("Failed to fetch supplier products:", err);
-                    setProductFetchUrl(`${API_BASE}/products?filter[product_id][_in]=-1`);
-                })
-                .finally(() => {
-                    setProductUrlLoading(false);
-                });
-        } else {
-            setProductFetchUrl(null);
-            setProductUrlLoading(false);
-            setSupplierProductsMap(new Map());
-        }
-    }, [showProductModal, activePO]);
-
     // Handle PO number generation
     useEffect(() => {
         if (showPOModal) {
@@ -187,31 +135,6 @@ export function PurchaseOrderView() {
         }
     }, [showPOModal, purchaseOrders]);
 
-    // Calculations for Add Product Modal
-    useEffect(() => {
-        calculateValues({
-            unitPrice,
-            selectedProduct,
-            lineDiscounts,
-            taxRates,
-            setDiscountedPrice,
-            setVatAmount,
-            setWithholdingAmount,
-        });
-    }, [unitPrice, selectedProduct, lineDiscounts, taxRates]);
-
-    // Updated calculation effect
-    useEffect(() => {
-        const qty = Number(orderedQuantity);
-        const price = Number(discountedPrice) > 0 ? Number(discountedPrice) : Number(unitPrice);
-        if (!isNaN(qty) && !isNaN(price)) {
-            setTotalAmount((qty * price).toFixed(2));
-        } else {
-            setTotalAmount("");
-        }
-    }, [orderedQuantity, unitPrice, discountedPrice]);
-
-
     const handlePOClick = async (poId: number) => {
         setActivePOId(poId);
         setTab("products");
@@ -219,7 +142,7 @@ export function PurchaseOrderView() {
 
         try {
             // Fetch products
-            const res = await fetch(`${API_BASE}/purchase_order_products?filter[purchase_order_id]=${poId}`);
+            const res = await fetch(`/api/lookup/purchase_order_products?filter[purchase_order_id]=${poId}`);
             const json = await res.json();
             const otherPOProducts = Array.isArray(products) ? products.filter((p) => p.purchase_order_id !== poId) : [];
             setProducts([...otherPOProducts, ...(json.data || [])]);
@@ -242,7 +165,7 @@ export function PurchaseOrderView() {
     };
     const fetchReceivingForPO = async (poId: number) => {
         try {
-            const res = await fetch(`${API_BASE}/purchase_order_receiving?purchase_order_id=${poId}`);
+            const res = await fetch(`/api/lookup/purchase_order_receiving?purchase_order_id=${poId}`);
             const json = await res.json();
             setReceivingForPO(json.data || []);
         } catch (error) {
@@ -256,8 +179,9 @@ export function PurchaseOrderView() {
     useEffect(() => {
         const fetchAllProducts = async () => {
             try {
-                const response = await axios.get(itemsUrl("products?limit=-1"));
-                const productsData = response.data?.data;
+                const response = await fetch("/api/lookup/products?limit=-1");
+                const json = await response.json();
+                const productsData = json?.data;
                 if (productsData && Array.isArray(productsData)) {
                     const newMap = new Map<number, string>();
                     productsData.forEach((product: { product_id: number, product_name: string }) => {
@@ -560,7 +484,7 @@ suppliers={suppliers}
               payment_status: 1
           };
 
-          const res = await fetch(`${API_BASE}/purchase_order`, {
+          const res = await fetch(`/api/purchase_order`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload)
@@ -574,7 +498,7 @@ suppliers={suppliers}
               return;
           }
 
-          const listRes = await fetch(`${API_BASE}/purchase_order`);
+          const listRes = await fetch(`/api/purchase_order`);
           const listJson = await listRes.json();
           setPurchaseOrders(listJson.data || []);
           setShowPOModal(false);
@@ -598,7 +522,7 @@ suppliers={suppliers}
         // Refresh the product list or perform any necessary actions after a product is added
         const fetchProducts = async () => {
             try {
-                const res = await fetch(`${API_BASE}/purchase_order_products?filter[purchase_order_id]=${activePO?.purchase_order_id}`);
+                const res = await fetch(`/api/lookup/purchase_order_products?filter[purchase_order_id]=${activePO?.purchase_order_id}`);
                 const json = await res.json();
                 const otherPOProducts = Array.isArray(products) ? products.filter((p) => p.purchase_order_id !== activePO?.purchase_order_id) : [];
                 setProducts([...otherPOProducts, ...(json.data || [])]);
@@ -625,13 +549,11 @@ suppliers={suppliers}
                     <DialogTitle>Product Details</DialogTitle>
                     {selectedPOProduct && (
                         <ProductDetailsModalContent
-                            key={selectedPOProduct.purchase_order_product_id}
                             product={selectedPOProduct}
                             getBranchName={(id: number, branches: any[]): string => {
     const branch = branches.find((b) => b.id === id);
     return branch ? branch.branch_name : "Unknown Branch";
 }}
-                            productNameMap={productNameMap}
                             onUpdate={(updatedData) => {
                                 const updatedProducts = products.map(p =>
                                     p.purchase_order_product_id === selectedPOProduct.purchase_order_product_id
@@ -651,10 +573,9 @@ suppliers={suppliers}
 }
 
 // Product Details Modal Content Component
-function ProductDetailsModalContent({ product, getBranchName, productNameMap, onUpdate, onClose }: {
+function ProductDetailsModalContent({ product, getBranchName, onUpdate, onClose }: {
     product: PurchaseOrderProduct;
     getBranchName: (id: number, branches: any[]) => string;
-    productNameMap: Map<number, string>;
     onUpdate: (updatedData: { branch_id: number, ordered_quantity: number }) => void;
     onClose: () => void;
 }) {
@@ -669,7 +590,7 @@ function ProductDetailsModalContent({ product, getBranchName, productNameMap, on
         // Fetch branch data once when the modal loads
         const fetchBranches = async () => {
             try {
-                const response = await fetch(itemsUrl("branches"));
+                const response = await fetch("/api/lookup/branches");
                 if (response.ok) {
                     const data = await response.json();
                     setBranches(data.data || []);
@@ -693,18 +614,18 @@ function ProductDetailsModalContent({ product, getBranchName, productNameMap, on
     useEffect(() => {
         const fetchProductDetails = async () => {
             try {
-                const response = await axios.get(itemsUrl(`products/${product.product_id}`));
+                const response = await axios.get(`/api/lookup/products/${product.product_id}`);
                 const fetchedProduct = response.data?.data;
 
                 if (fetchedProduct?.product_brand) {
-                    const brandResponse = await axios.get(itemsUrl("brand"));
+                    const brandResponse = await axios.get("/api/lookup/brand");
                     const brands = brandResponse.data?.data || [];
                     const brand = brands.find((b: { brand_id: number }) => b.brand_id === fetchedProduct.product_brand);
                     fetchedProduct.product_brand = brand ? brand.brand_name : "Unknown Brand";
                 }
 
                 if (fetchedProduct?.product_category) {
-                    const categoryResponse = await axios.get(itemsUrl("categories"));
+                    const categoryResponse = await axios.get("/api/lookup/categories");
                     const categories = categoryResponse.data?.data || [];
                     const category = categories.find((c: { category_id: number }) => c.category_id === fetchedProduct.product_category);
                     fetchedProduct.product_category = category ? category.category_name : "Unknown Category";
@@ -734,7 +655,7 @@ function ProductDetailsModalContent({ product, getBranchName, productNameMap, on
         }
 
         try {
-            const res = await fetch(`${API_BASE}/purchase_order_products/${product.purchase_order_product_id}`, {
+            const res = await fetch(`/api/purchase_order_products/${product.purchase_order_product_id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)

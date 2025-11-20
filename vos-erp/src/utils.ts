@@ -1,5 +1,4 @@
 import { Supplier } from "@/types";
-import { itemsUrl } from "@/config/api";
 
 export function getSupplierName(id: number, suppliers: Supplier[]): string {
   const supplier = suppliers.find((s) => s.id === id);
@@ -44,7 +43,6 @@ export function calculateValues({
   const calculatedWithholding = price * taxRates.WithholdingRate;
   setWithholdingAmount(calculatedWithholding.toFixed(2));
 }
-export const API_BASE = itemsUrl();
 
 export const INVENTORY_STATUS: { [key: number]: string } = { 0: "Pending", 1: "Partial", 2: "Received" };
 export const INVENTORY_STATUS_COLOR: { [key: number]: string } = { 0: "status-pending", 1: "status-partial", 2: "status-received" };

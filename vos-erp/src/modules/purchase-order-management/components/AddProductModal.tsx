@@ -3,8 +3,6 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import axios from 'axios';
 
-// Note: Using the hardcoded API base URL as requested.
-const API_BASE = "http://100.119.3.44:8090/items";
 
 // Define a type for the products in the dropdown
 interface ProductOption {
@@ -49,8 +47,8 @@ export function AddProductModal({ open, onClose, activePO, onProductAdded }: Add
                 setError("");
                 try {
                     const [branchesRes, supplierProductsRes] = await Promise.all([
-                        fetch(`${API_BASE}/branches`),
-                        fetch(`${API_BASE}/supplier_discount_products?filter[supplier_id][_eq]=${activePO.supplier_id}&fields=product_id.*`)
+                        fetch("/api/lookup/branches"),
+                        fetch(`/api/lookup/supplier_discount_products?filter[supplier_id][_eq]=${activePO.supplier_id}&fields=product_id.*`)
                     ]);
 
                     if (!branchesRes.ok) throw new Error("Failed to fetch branches.");
@@ -100,7 +98,7 @@ export function AddProductModal({ open, onClose, activePO, onProductAdded }: Add
 
     // Effect to fetch tax rates
     useEffect(() => {
-        axios.get(`${API_BASE}/tax_rates`)
+        axios.get("/api/lookup/tax_rates")
             .then(response => {
                 if (response.data?.data?.[0]) {
                     const rates = response.data.data[0];
@@ -146,7 +144,7 @@ export function AddProductModal({ open, onClose, activePO, onProductAdded }: Add
             setLoading(true);
             setError("");
             try {
-                const productResponse = await axios.get(`${API_BASE}/products/${value}`);
+                const productResponse = await axios.get(`/api/lookup/products/${value}`);
                 const product = productResponse.data?.data;
                 const unitPrice = parseFloat(product?.price_per_unit) || 0;
 
@@ -156,12 +154,12 @@ export function AddProductModal({ open, onClose, activePO, onProductAdded }: Add
                 };
 
                 const supplierDiscountResponse = await axios.get(
-                    `${API_BASE}/supplier_discount_products?filter[product_id][_eq]=${value}&filter[supplier_id][_eq]=${activePO?.supplier_id}`
+                    `/api/lookup/supplier_discount_products?filter[product_id][_eq]=${value}&filter[supplier_id][_eq]=${activePO?.supplier_id}`
                 );
                 const lineDiscountId = supplierDiscountResponse.data?.data?.[0]?.line_discount_id;
 
                 if (lineDiscountId) {
-                    const lineDiscountResponse = await axios.get(`${API_BASE}/line_discount/${lineDiscountId}`);
+                    const lineDiscountResponse = await axios.get(`/api/lookup/line_discount/${lineDiscountId}`);
                     // FIX: Changed 'discount_percentage' to 'percentage' to match the API response
                     const discountPercentage = parseFloat(lineDiscountResponse.data?.data?.percentage) || 0;
 
@@ -211,7 +209,7 @@ export function AddProductModal({ open, onClose, activePO, onProductAdded }: Add
                 branch_id: Number(productFields.branch_id),
             };
 
-            const response = await fetch(`${API_BASE}/purchase_order_products`, {
+            const response = await fetch(`/api/purchase_order_products`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

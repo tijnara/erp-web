@@ -3,23 +3,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Salesman, UpsertSalesmanDTO } from "../types";
-import { apiUrl, itemsUrl } from "../../../config/api";
 
 export type Option = { value: string | number; label: string };
 
 async function fetchOptionsSafe(endpoint: string): Promise<Option[]> {
   try {
-    const res = await fetch(apiUrl(endpoint));
+    const res = await fetch(`/api/lookup/${endpoint}`);
     if (!res.ok) return [];
-    const json = await res.json();
-    const rows: any[] = json?.data ?? [];
-    return rows.map((r) => {
-      const value =
-        r.price_type_id ?? r.code ?? r.id ?? r.value ?? r.key ?? "";
-      const label =
-        r.price_type_name ?? r.name ?? r.label ?? r.salesman_name ?? String(value);
-      return { value, label } as Option;
-    });
+    const options: any[] = await res.json();
+    return options.map((option) => ({
+      value: option.id,
+      label: option.name
+    }));
   } catch {
     return [];
   }
@@ -28,15 +23,13 @@ async function fetchOptionsSafe(endpoint: string): Promise<Option[]> {
 // Branch options: ensure option.value is the branch ID
 async function fetchBranchOptions(): Promise<Option[]> {
   try {
-    const res = await fetch(apiUrl("items/branches"));
+    const res = await fetch("/api/lookup/branches");
     if (!res.ok) return [];
-    const json = await res.json();
-    const rows: any[] = json?.data ?? [];
-    return rows.map((r) => {
-      const value = r.branch_id ?? r.id ?? r.branch_code ?? r.code ?? "";
-      const label = r.branch_name ?? r.name ?? String(value);
-      return { value, label } as Option;
-    });
+    const options: any[] = await res.json();
+    return options.map((option) => ({
+      value: option.id,
+      label: option.name
+    }));
   } catch {
     return [];
   }
@@ -45,15 +38,13 @@ async function fetchBranchOptions(): Promise<Option[]> {
 // Company options: ensure option.value is the company ID
 async function fetchCompanyOptions(): Promise<Option[]> {
   try {
-    const res = await fetch(apiUrl("items/company"));
+    const res = await fetch("/api/lookup/company");
     if (!res.ok) return [];
-    const json = await res.json();
-    const rows: any[] = json?.data ?? [];
-    return rows.map((r) => {
-      const value = r.company_id ?? r.id ?? r.company_code ?? r.code ?? "";
-      const label = r.company_name ?? r.name ?? String(value);
-      return { value, label } as Option;
-    });
+    const options: any[] = await res.json();
+    return options.map((option) => ({
+      value: option.id,
+      label: option.name
+    }));
   } catch {
     return [];
   }
@@ -62,15 +53,13 @@ async function fetchCompanyOptions(): Promise<Option[]> {
 // Division options: ensure option.value is the division ID
 async function fetchDivisionOptions(): Promise<Option[]> {
   try {
-    const res = await fetch(apiUrl("items/division"));
+    const res = await fetch("/api/lookup/division");
     if (!res.ok) return [];
-    const json = await res.json();
-    const rows: any[] = json?.data ?? [];
-    return rows.map((r) => {
-      const value = r.division_id ?? r.id ?? "";
-      const label = r.division_name ?? String(value);
-      return { value, label } as Option;
-    });
+    const options: any[] = await res.json();
+    return options.map((option) => ({
+      value: option.id,
+      label: option.name
+    }));
   } catch {
     return [];
   }
@@ -79,15 +68,13 @@ async function fetchDivisionOptions(): Promise<Option[]> {
 // Supplier options: ensure option.value is the supplier ID
 async function fetchSupplierOptions(): Promise<Option[]> {
   try {
-    const res = await fetch(apiUrl("items/suppliers"));
+    const res = await fetch("/api/lookup/suppliers");
     if (!res.ok) return [];
-    const json = await res.json();
-    const rows: any[] = json?.data ?? [];
-    return rows.map((r) => {
-      const value = r.id;
-      const label = r.supplier_name ?? String(value);
-      return { value, label } as Option;
-    });
+    const options: any[] = await res.json();
+    return options.map((option) => ({
+      value: option.id,
+      label: option.name
+    }));
   } catch {
     return [];
   }
@@ -99,7 +86,7 @@ export type UserRow = { user_id: number; user_fname?: string; user_lname?: strin
 
 async function fetchUsersOptions(op?: string | number): Promise<{ options: Option[]; byId: Record<string, UserRow> }> {
   try {
-    const url = new URL(itemsUrl("user"));
+    const url = new URL("/api/lookup/user", window.location.origin);
     if (op != null && op !== "") {
       url.searchParams.set("operation", String(op));
     }
@@ -136,7 +123,7 @@ function parseSalesmanCodeNumber(code: any): number {
 
 async function generateNextSalesmanCode(): Promise<string> {
   try {
-    const res = await fetch(itemsUrl("salesman"));
+    const res = await fetch("/api/lookup/salesman");
     if (!res.ok) return "SM-0001";
     const json = await res.json();
     const rows: any[] = json?.data ?? [];
@@ -232,11 +219,11 @@ export function SalesmanFormDialog({
     if (!open) return;
     // try to fetch lookups; ignore errors
     fetchBranchOptions().then(setBranches);
-    fetchOptionsSafe("items/operation").then(setOperations);
+    fetchOptionsSafe("operation").then(setOperations);
     fetchCompanyOptions().then(setCompanies);
     fetchSupplierOptions().then(setSuppliers);
     fetchDivisionOptions().then(setDivisions);
-    fetchOptionsSafe("items/price_types").then(setPriceTypes);
+    fetchOptionsSafe("price_types").then(setPriceTypes);
     fetchUsersOptions(operation).then(({ options, byId }) => {
       setUsers(options);
       setUsersById(byId);

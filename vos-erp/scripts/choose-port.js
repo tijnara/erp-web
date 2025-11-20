@@ -11,7 +11,7 @@ if (args[0] === "dev" || args[0] === "start") {
 }
 const extraArgs = args; // e.g. ["--turbopack"]
 
-const PORT_RANGE = { start: 3010, end: 3015 };
+const PORT_RANGE = { start: 3020, end: 3025 };
 const ports = Array.from({ length: PORT_RANGE.end - PORT_RANGE.start + 1 }, (_, i) => PORT_RANGE.start + i);
 
 function isPortAvailable(port) {

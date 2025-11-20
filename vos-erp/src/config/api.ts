@@ -1,13 +1,13 @@
 // src/config/api.ts
-// API configuration for vos-erp
-// Note: This file is kept for legacy compatibility but most API calls now use Supabase directly
+// Centralized API base URL and helpers for vos-erp
 
 export type ApiConfig = {
   baseUrl: string;
 };
 
-// Legacy support - no longer used with Supabase
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090";
+// CHANGE: Set default to empty string for relative paths (e.g. "/api/...")
+// or specific URL if using a separate backend service.
+const DEFAULT_BASE_URL = "";
 
 function resolveBaseUrl(): string {
   const w: any = typeof window !== "undefined" ? (window as any) : undefined;
@@ -23,13 +23,8 @@ export const API_BASE_URL: string = resolveBaseUrl();
 export function apiUrl(path: string): string {
   const base = API_BASE_URL.replace(/\/+$/, "");
   const cleanPath = path.replace(/^\/+/, "");
-  return `${base}/${cleanPath}`;
+  // If base is empty, ensure we don't start with a double slash
+  return base ? `${base}/${cleanPath}` : `/${cleanPath}`;
 }
 
-
-export const ITEMS_BASE = apiUrl("items");
-
-export function itemsUrl(path: string = ""): string {
-  const clean = path.replace(/^\/+/, "");
-  return clean ? `${ITEMS_BASE}/${clean}` : ITEMS_BASE;
-}
+// CHANGE: Removed ITEMS_BASE and itemsUrl as they were specific to Directus structure
