@@ -100,9 +100,16 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                     // Helper to extract data array safely
                     const getData = (res: any) => Array.isArray(res.data) ? res.data : (res.data?.data || []);
 
-                    setPaymentTerms(getData(termsRes));
+                    setPaymentTerms(getData(termsRes).map((pt: any) => ({ 
+                        id: pt.id, 
+                        payment_name: pt.name, 
+                        payment_days: pt.payment_days ?? null 
+                    })));
                     setPriceTypes(getData(typesRes).map((pt: any) => ({ id: pt.id ?? pt.price_type_id, name: pt.name ?? pt.price_type_name })));
-                    setReceivingTypes(getData(receivingRes));
+                    setReceivingTypes(getData(receivingRes).map((rt: any) => ({ 
+                        id: rt.id, 
+                        description: rt.name ?? rt.description 
+                    })));
 
                     // Map suppliers carefully
                     const rawSuppliers = getData(suppliersRes);
