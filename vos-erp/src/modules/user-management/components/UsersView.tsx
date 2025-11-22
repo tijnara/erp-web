@@ -24,30 +24,54 @@ export function UsersView({ provider }: { provider: DataProvider }) {
 
     async function refresh() {
         const offset = (page - 1) * limit;
-        const { items, total } = await provider.listUsers({ q, limit, offset });
-        setRows(items);
-        setTotal(total);
+        try {
+            const { items, total } = await provider.listUsers({ q, limit, offset });
+            setRows(Array.isArray(items) ? items : []);
+            setTotal(total);
+        } catch (e) {
+            setRows([]);
+            setTotal(0);
+        }
     }
 
     useEffect(() => {
         let alive = true;
         const offset = (page - 1) * limit;
-        provider.listUsers({ q, limit, offset }).then(({ items, total }) => {
-            if (!alive) return;
-            setRows(items);
-            setTotal(total);
-        });
+        provider.listUsers({ q, limit, offset })
+            .then(({ items, total }) => {
+                if (!alive) return;
+                setRows(Array.isArray(items) ? items : []);
+                setTotal(total);
+            })
+            .catch(() => {
+                if (!alive) return;
+                setRows([]);
+                setTotal(0);
+            });
+        // Safe department fetch with fallback to plural table name.
         import('@/lib/supabase').then(({ supabase }) => {
-            supabase
-                .from("department")
-                .select("*")
-                .then(({ data }) => {
-                    if (alive && data) setDepartments(data);
-                });
+            const fetchDepartmentsSafely = async () => {
+                const tablesToTry = ['department', 'departments'];
+                for (const t of tablesToTry) {
+                    try {
+                        const { data, error } = await supabase.from(t).select('*');
+                        if (!alive) return;
+                        if (!error && Array.isArray(data)) {
+                            setDepartments(data as Department[]);
+                            return; // stop after first successful fetch
+                        }
+                    } catch (_) {
+                        // swallow and continue to next table name
+                    }
+                }
+                if (alive) setDepartments([]); // ensure array fallback
+            };
+            fetchDepartmentsSafely();
+        }).catch(() => {
+            if (!alive) return;
+            setDepartments([]);
         });
-        return () => {
-            alive = false;
-        };
+        return () => { alive = false; };
     }, [q, page, provider]);
 
     function displayFullName(user: User): string {

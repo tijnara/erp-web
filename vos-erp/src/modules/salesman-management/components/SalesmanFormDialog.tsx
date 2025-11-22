@@ -98,14 +98,14 @@ export function SalesmanFormDialog({
   initial,
   onCloseAction,
   onSubmitAction,
-  onClose, // NEW optional alias prop
+  onClose,
 }: {
   open: boolean;
   mode: "create" | "edit";
   initial?: Partial<Salesman>;
-  onCloseAction?: () => void; // made optional
+  onCloseAction?: () => void; // optional legacy prop
   onSubmitAction: (dto: UpsertSalesmanDTO) => Promise<void>;
-  onClose?: () => void; // NEW optional
+  onClose?: () => void; // optional newer prop
 }) {
   const [employee_id, setEmployeeId] = useState<number | "">(initial?.employee_id ?? "");
   const [code, setCode] = useState(initial?.code ?? "");
@@ -135,12 +135,18 @@ export function SalesmanFormDialog({
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState<number>(-1);
 
-  // Unified close handler (prefers onCloseAction then onClose)
-  const invokeClose = useCallback(() => {
-    if (submitting) return; // do not close while submitting
-    const fn = onCloseAction || onClose;
-    if (typeof fn === "function") fn();
-    else console.warn("[SalesmanFormDialog] No close handler provided (onCloseAction/onClose)");
+  // REPLACED invokeClose with closeFn providing hard fallback (no-op) to avoid TypeError
+  const closeFn = useCallback(() => {
+    if (submitting) return;
+    if (typeof onCloseAction === "function") {
+      try { onCloseAction(); } catch (e) { console.error("onCloseAction threw", e); }
+      return;
+    }
+    if (typeof onClose === "function") {
+      try { onClose(); } catch (e) { console.error("onClose threw", e); }
+      return;
+    }
+    // silent no-op fallback
   }, [onCloseAction, onClose, submitting]);
 
   // When user changes, auto-fill employee_id and name
@@ -224,12 +230,12 @@ export function SalesmanFormDialog({
     const escListener = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        invokeClose();
+        closeFn();
       }
     };
     window.addEventListener("keydown", escListener);
     return () => window.removeEventListener("keydown", escListener);
-  }, [open, invokeClose]);
+  }, [open, closeFn]);
 
   const canSubmit = useMemo(() => {
     return !(selectedUserId === "" || !code || employee_id === "" || isNaN(Number(employee_id)));
@@ -256,7 +262,7 @@ export function SalesmanFormDialog({
         isActive,
       };
       await onSubmitAction(dto);
-      invokeClose();
+      closeFn();
     } finally {
       setSubmitting(false);
     }
@@ -270,7 +276,7 @@ export function SalesmanFormDialog({
         className="absolute inset-0 bg-black/30"
         onClick={(e) => {
           e.stopPropagation();
-          invokeClose();
+          closeFn();
         }}
       />
       <div className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl border border-gray-200 p-5">
@@ -450,7 +456,7 @@ export function SalesmanFormDialog({
         <div className="mt-6 flex items-center justify-end gap-2">
           <button
             className="px-3 py-2 rounded-lg border text-sm"
-            onClick={invokeClose}
+            onClick={closeFn}
             disabled={submitting}
             type="button"
           >

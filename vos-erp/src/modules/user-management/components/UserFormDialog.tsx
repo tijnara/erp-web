@@ -136,11 +136,14 @@ export function UserFormDialog({
     setBday(initial?.user_bday ?? "");
     setRfId(initial?.rf_id ?? "");
 
+    // SAFE FETCH: departments endpoint with robust fallbacks
     fetch("/api/lookup/department")
-    .then((res) => res.json())
-    .then((data) => {
-      setDepartments(data.data);
-    });
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        // Ensure always an array
+        setDepartments(Array.isArray(data?.data) ? data.data : []);
+      })
+      .catch(() => setDepartments([]));
 
         // Lazy-load local geographic JSONs only when dialog is open
         (async () => {
@@ -372,7 +375,7 @@ export function UserFormDialog({
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
             >
               <option value="">Select a Department</option>
-              {departments.map((d) => (
+              {departments?.map((d) => (
                 <option key={d.department_id} value={d.department_id}>
                   {d.department_name}
                 </option>
