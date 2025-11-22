@@ -16,13 +16,14 @@ type UserRow = { user_id: number; user_fname?: string; user_lname?: string };
 
 type SalesmanRow = { salesman_code?: string };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function safeQuery<T>(builder: any): Promise<T | []> {
   try {
     const { data, error } = await builder;
-    if (error || !data) return [] as any;
+    if (error || !data) return [];
     return data as T;
   } catch {
-    return [] as any;
+    return [];
   }
 }
 
@@ -80,7 +81,7 @@ async function generateNextSalesmanCode(): Promise<string> {
   return `SM-${String(max + 1).padStart(4, "0")}`;
 }
 
-function InputLabel({ children, required }: { children: any; required?: boolean }) {
+function InputLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
     <div className="text-sm font-medium mb-1">
       {children}
@@ -88,7 +89,7 @@ function InputLabel({ children, required }: { children: any; required?: boolean 
     </div>
   );
 }
-function Help({ children }: { children: any }) {
+function Help({ children }: { children: React.ReactNode }) {
   return <div className="text-xs text-gray-400 mt-1">{children}</div>;
 }
 
@@ -129,7 +130,7 @@ export function SalesmanFormDialog({
   const [submitting, setSubmitting] = useState(false);
 
   const [users, setUsers] = useState<Option[]>([]);
-  const [usersById, setUsersById] = useState<Record<string, any>>({});
+  const [usersById, setUsersById] = useState<Record<string, UserRow>>({});
   const [selectedUserId, setSelectedUserId] = useState<string | number | "">(initial?.employee_id ?? "");
   const [userQuery, setUserQuery] = useState("");
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
@@ -312,7 +313,7 @@ export function SalesmanFormDialog({
                 } else if (e.key === "Enter") {
                   if (highlightIndex >= 0 && filteredUsers[highlightIndex]) {
                     const o = filteredUsers[highlightIndex];
-                    setSelectedUserId(o.value as any);
+                    setSelectedUserId(o.value as string | number);
                     setUserQuery(o.label);
                     setShowUserSuggestions(false);
                   }
@@ -331,7 +332,7 @@ export function SalesmanFormDialog({
                     key={String(o.value)}
                     className={`px-3 py-2 text-sm cursor-pointer ${idx === highlightIndex ? "bg-gray-100" : ""}`}
                     onMouseDown={() => {
-                      setSelectedUserId(o.value as any);
+                      setSelectedUserId(o.value as string | number);
                       setUserQuery(o.label);
                       setShowUserSuggestions(false);
                     }}

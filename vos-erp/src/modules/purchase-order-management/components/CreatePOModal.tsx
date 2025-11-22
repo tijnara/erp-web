@@ -31,7 +31,7 @@ interface Supplier {
 interface CreatePOModalProps {
     open: boolean;
     onClose: () => void;
-    onPoCreated?: (newPO: any) => void; // Callback to update parent state, optional
+    onPoCreated?: (newPO: Record<string, unknown>) => void; // Callback to update parent state, optional
 }
 
 // --- Main Modal Component ---
@@ -98,29 +98,29 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
                     ]);
 
                     // Helper to extract data array safely
-                    const getData = (res: any) => Array.isArray(res.data) ? res.data : (res.data?.data || []);
+                    const getData = (res: { data: unknown }) => Array.isArray(res.data) ? res.data : ((res.data as { data?: unknown[] })?.data || []);
 
-                    setPaymentTerms(getData(termsRes).map((pt: any) => ({ 
-                        id: pt.id, 
-                        payment_name: pt.name, 
-                        payment_days: pt.payment_days ?? null 
+                    setPaymentTerms(getData(termsRes).map((pt: Record<string, unknown>) => ({ 
+                        id: pt.id as number, 
+                        payment_name: pt.name as string, 
+                        payment_days: (pt.payment_days ?? null) as number | null 
                     })));
-                    setPriceTypes(getData(typesRes).map((pt: any) => ({ id: pt.id ?? pt.price_type_id, name: pt.name ?? pt.price_type_name })));
-                    setReceivingTypes(getData(receivingRes).map((rt: any) => ({ 
-                        id: rt.id, 
-                        description: rt.name ?? rt.description 
+                    setPriceTypes(getData(typesRes).map((pt: Record<string, unknown>) => ({ id: (pt.id ?? pt.price_type_id) as number, name: (pt.name ?? pt.price_type_name) as string })));
+                    setReceivingTypes(getData(receivingRes).map((rt: Record<string, unknown>) => ({ 
+                        id: rt.id as number, 
+                        description: (rt.name ?? rt.description) as string 
                     })));
 
                     // Map suppliers carefully
                     const rawSuppliers = getData(suppliersRes);
-                    setSuppliers(rawSuppliers.map((s: any) => ({
-                        id: s.id,
-                        supplier_name: s.supplier_name || s.name,
-                        supplier_type: s.supplier_type || "",
-                        payment_terms: s.payment_terms || ""
+                    setSuppliers(rawSuppliers.map((s: Record<string, unknown>) => ({
+                        id: s.id as number,
+                        supplier_name: (s.supplier_name || s.name) as string,
+                        supplier_type: (s.supplier_type || "") as string,
+                        payment_terms: (s.payment_terms || "") as string
                     })));
 
-                    setTransactionTypes(getData(transactionRes).map((tt: any) => ({ id: tt.id, name: tt.name ?? tt.transaction_type })));
+                    setTransactionTypes(getData(transactionRes).map((tt: Record<string, unknown>) => ({ id: tt.id as number, name: (tt.name ?? tt.transaction_type) as string })));
 
                     // Calculate next PO number
                     let newPONumber;
@@ -248,9 +248,12 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
             onPoCreated(createdPO);
             onClose();
 
-        } catch (err: any) {
-            console.error("Failed to create purchase order:", err.response?.data || err.message || err);
-            setError(err.response?.data?.errors?.[0]?.message || err.message || "An unexpected error occurred.");
+        } catch (err: unknown) {
+            console.error("Failed to create purchase order:", err);
+            const errorMessage = (err as { response?: { data?: { errors?: Array<{ message: string }> } }; message?: string })?.response?.data?.errors?.[0]?.message 
+                || (err as { message?: string })?.message 
+                || "An unexpected error occurred.";
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
