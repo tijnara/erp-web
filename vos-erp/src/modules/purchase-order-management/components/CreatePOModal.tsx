@@ -27,6 +27,13 @@ interface Supplier {
 }
 // --- highlight-end ---
 
+// Helper function to extract error message from various error formats
+function extractErrorMessage(err: unknown): string {
+    const axiosError = err as { response?: { data?: { errors?: Array<{ message: string }> } }; message?: string };
+    return axiosError?.response?.data?.errors?.[0]?.message 
+        || axiosError?.message 
+        || "An unexpected error occurred.";
+}
 
 interface CreatePOModalProps {
     open: boolean;
@@ -250,10 +257,7 @@ export function CreatePOModal({ open, onClose, onPoCreated = () => {} }: CreateP
 
         } catch (err: unknown) {
             console.error("Failed to create purchase order:", err);
-            const errorMessage = (err as { response?: { data?: { errors?: Array<{ message: string }> } }; message?: string })?.response?.data?.errors?.[0]?.message 
-                || (err as { message?: string })?.message 
-                || "An unexpected error occurred.";
-            setError(errorMessage);
+            setError(extractErrorMessage(err));
         } finally {
             setLoading(false);
         }

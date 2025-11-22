@@ -69,13 +69,15 @@ const MAP: Record<
         path: "price_types",
         fields: "price_type_id,price_type_name,code",
         nameField: "price_type_name",
-        idField: "price_type_id"
+        idField: "price_type_id",
+        extra: ["code"]
     },
     payment_terms: {
         path: "payment_terms",
         fields: "id,payment_name,payment_days",
         nameField: "payment_name",
-        idField: "id"
+        idField: "id",
+        extra: ["payment_days"]
     },
     receiving_type: {
         path: "receiving_type",
