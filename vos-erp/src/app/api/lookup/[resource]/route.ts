@@ -48,30 +48,67 @@ const MAP: Record<
     },
     suppliers: {
         path: "suppliers",
-        fields: "id,supplier_name",
+        fields: "id,supplier_name,supplier_shortcut,supplier_type,payment_terms",
         nameField: "supplier_name",
-        idField: "id"
+        idField: "id",
+        extra: ["supplier_shortcut", "supplier_type", "payment_terms"]
     },
     operation: {
         path: "operation",
-        fields: "id,name,code",
+        fields: "id,name,code,operation_name",
         nameField: "name",
+        idField: "id"
+    },
+    operations: {
+        path: "operations",
+        fields: "id,operation_name,name,code",
+        nameField: "operation_name",
         idField: "id"
     },
     price_types: {
         path: "price_types",
         fields: "price_type_id,price_type_name,code",
         nameField: "price_type_name",
-        idField: "price_type_id"
+        idField: "price_type_id",
+        extra: ["code"]
+    },
+    payment_terms: {
+        path: "payment_terms",
+        fields: "id,payment_name,payment_days",
+        nameField: "payment_name",
+        idField: "id",
+        extra: ["payment_days"]
+    },
+    receiving_type: {
+        path: "receiving_type",
+        fields: "id,description",
+        nameField: "description",
+        idField: "id"
+    },
+    transaction_type: {
+        path: "transaction_type",
+        fields: "id,name",
+        nameField: "name",
+        idField: "id"
+    },
+    purchase_order: {
+        path: "purchase_order",
+        fields: "id,purchase_order_no,date,supplier_id",
+        nameField: "purchase_order_no",
+        idField: "id"
+    },
+    department: {
+        path: "department",
+        fields: "id,name",
+        nameField: "name",
+        idField: "id"
+    },
+    departments: {
+        path: "departments",
+        fields: "id,name",
+        nameField: "name",
+        idField: "id"
     }
-    // NOTE: transaction_type table doesn't exist in Supabase yet
-    // When ready, uncomment and create the table:
-    // transaction_type: {
-    //     path: "transaction_type",
-    //     fields: "id,name",
-    //     nameField: "name",
-    //     idField: "id"
-    // }
 };
 
 export async function GET(req: NextRequest, context: { params: Promise<{ resource: string }> }) {
@@ -81,6 +118,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ resourc
 
     const url = new URL(req.url);
     const q = url.searchParams.get("q") ?? "";
+    const limitParam = url.searchParams.get("limit");
+    const sortParam = url.searchParams.get("sort");
 
     const cookieStore = await nextCookies();
     const auth = cookieStore.get(ACCESS)?.value;
@@ -91,7 +130,17 @@ export async function GET(req: NextRequest, context: { params: Promise<{ resourc
         { global: { headers: { Authorization: `Bearer ${auth}` } } }
     );
 
-    let query = supabase.from(cfg.path).select(cfg.fields).limit(20).order(cfg.nameField);
+    const limit = limitParam ? parseInt(limitParam, 10) : 20;
+    let query = supabase.from(cfg.path).select(cfg.fields).limit(limit);
+    
+    // Handle sort parameter (e.g., "-purchase_order_no" for descending)
+    if (sortParam) {
+        const isDesc = sortParam.startsWith("-");
+        const sortField = isDesc ? sortParam.slice(1) : sortParam;
+        query = query.order(sortField, { ascending: !isDesc });
+    } else {
+        query = query.order(cfg.nameField);
+    }
 
     if (q.trim()) {
         query = query.ilike(cfg.nameField, `%${q.trim()}%`);
@@ -104,14 +153,21 @@ export async function GET(req: NextRequest, context: { params: Promise<{ resourc
         return NextResponse.json([], { status: 200 });
     }
 
-    const options = (data as any[]).map((row) => {
+    const options = (data as Array<Record<string, unknown>>).map((row) => {
         const id = row[cfg.idField];
         const name = row[cfg.nameField];
-        const meta: any = {};
-        if (cfg.extra?.includes("unit_shortcut") && row.unit_shortcut) {
-            meta.subtitle = row.unit_shortcut;
+        const result: Record<string, unknown> = { id, name };
+        
+        // Include all extra fields in the response
+        if (cfg.extra) {
+            cfg.extra.forEach(field => {
+                if (row[field] !== undefined) {
+                    result[field] = row[field];
+                }
+            });
         }
-        return { id, name, meta };
+        
+        return result;
     });
 
     return NextResponse.json(options);
